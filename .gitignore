@@ -1,0 +1,172 @@
+# ==============================================================================
+# Global .gitignore for OmniDoc AI (Flutter Frontend + Python FastAPI Backend)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment & Secrets (NEVER COMMIT)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+secrets/
+*secret*.json
+
+# ------------------------------------------------------------------------------
+# 2. Operating System Files
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# ------------------------------------------------------------------------------
+# 3. IDEs & Editors
+# ------------------------------------------------------------------------------
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Xcode
+xcuserdata/
+*.xcscmblueprint
+
+# ------------------------------------------------------------------------------
+# 4. Backend (Python & FastAPI)
+# ------------------------------------------------------------------------------
+# Bytecode and Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Package & Distribution
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Linting
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# Local Databases, Storage & Uploads
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+uploads/
+temp/
+tmp/
+storage/
+media/
+
+# Vector Stores & Embedded Index Caches
+chroma_db/
+chroma_data/
+.chroma/
+qdrant_storage/
+faiss_index/
+vector_store_data/
+
+# ------------------------------------------------------------------------------
+# 5. Frontend (Flutter & Dart)
+# ------------------------------------------------------------------------------
+# Dart / Flutter build artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.lock.bak
+
+# Android platform files
+android/.gradle/
+android/captures/
+android/gradleBuild/
+android/app/build/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# iOS platform files
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.flx
+ios/Flutter/app.zip
+ios/Flutter/flutter_assets/
+ios/DerivedData/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Mobile Firebase / Services configs containing private credentials
+google-services.json
+GoogleService-Info.plist
+
+# ------------------------------------------------------------------------------
+# 6. Logs & Diagnostics
+# ------------------------------------------------------------------------------
+*.log
+logs/
+*.pid
+*.seed
