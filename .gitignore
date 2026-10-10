@@ -117,48 +117,6 @@ tmp/
 storage/
 media/
 
-# Vector Stores & Embedded Index Caches
-chroma_db/
-chroma_data/
-.chroma/
-qdrant_storage/
-faiss_index/
-vector_store_data/
-
-# ------------------------------------------------------------------------------
-# 5. Frontend (Flutter & Dart)
-# ------------------------------------------------------------------------------
-# Dart / Flutter build artifacts
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-*.lock.bak
-
-# Android platform files
-android/.gradle/
-android/captures/
-android/gradleBuild/
-android/app/build/
-android/local.properties
-android/key.properties
-*.jks
-*.keystore
-
-# iOS platform files
-ios/Pods/
-ios/.symlinks/
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
-ios/Flutter/Generated.xcconfig
-ios/Flutter/app.flx
-ios/Flutter/app.zip
-ios/Flutter/flutter_assets/
-ios/DerivedData/
-ios/*.xcworkspace/xcuserdata/
-ios/*.xcodeproj/xcuserdata/
-ios/*.xcodeproj/project.xcworkspace/xcuserdata/
-
 # Mobile Firebase / Services configs containing private credentials
 google-services.json
 GoogleService-Info.plist
