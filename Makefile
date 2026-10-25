@@ -65,19 +65,25 @@ save:
 # 3. Backend (Python / FastAPI)
 # ------------------------------------------------------------------------------
 backend-install:
-	pip install -r backend/requirements.txt
+	pip install -r genai_backend/requirements.txt
 
 backend-dev:
-	uvicorn app.main:app --reload --app-dir backend
+	cd genai_backend && uvicorn main:app --reload
+
+backend-test:
+	cd genai_backend && python -m pytest -v
+
+backend-test-ui:
+	cd genai_backend && python -c "import webbrowser, os; webbrowser.open('file:///' + os.path.abspath('tests/test_ui.html').replace(os.sep, '/'))"
 
 # ------------------------------------------------------------------------------
 # 4. Frontend (Flutter)
 # ------------------------------------------------------------------------------
 mobile-get:
-	cd mobile && flutter pub get
+	cd mobile_app && flutter pub get
 
 mobile-dev:
-	cd mobile && flutter run
+	cd mobile_app && flutter run
 
 # ------------------------------------------------------------------------------
 # 5. Maintenance (Cross-Platform Python Clean)

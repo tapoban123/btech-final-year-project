@@ -1,1 +1,47 @@
 fastapi[standard]
+pydantic>=2.0,<3.0
+pydantic-settings>=2.0
+pyyaml
+uvicorn[standard]
+python-multipart
+sse-starlette
+
+# LangChain / LangGraph
+langgraph>=0.2
+langchain>=0.3
+langchain-groq
+langchain-community
+langchain-text-splitters
+langchain-huggingface
+sentence-transformers
+
+# Vector / Search
+faiss-cpu
+rank-bm25
+numpy
+
+# Document Processing
+pymupdf
+opencv-python-headless
+
+# Web Search
+tavily-python
+
+# Database
+sqlmodel
+sqlalchemy[asyncio]
+asyncpg
+aiosqlite
+
+# Tracing (optional)
+langsmith
+
+# Utilities
+httpx
+python-dotenv
+streamlit
+
+# Testing
+pytest
+pytest-asyncio
+httpx

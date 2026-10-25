@@ -1,0 +1,45 @@
+retrieval:
+  top_k: 10
+  max_chunks_per_doc: 4
+  chunk_size: 800
+  chunk_overlap: 120
+  embedding_model: "all-MiniLM-L6-v2"
+
+ocr:
+  text_layer_min_chars: 50
+  dpi: 300
+  printed_provider: "paddleocr"
+  handwriting_provider: "vision_llm"
+  handwriting_conf_threshold: 0.6
+  low_conf_flag: 0.4
+  max_parallel_pages: 8
+
+grading:
+  batch_size: 10
+  correct_min_score2: 1
+  ambiguous_min_score1: 2
+
+loops:
+  max_rewrites: 1
+  max_generations: 2
+  graph_timeout_s: 60
+  recursion_limit: 12
+
+web_search:
+  max_results: 4
+  speculative: false
+
+llm:
+  main_model: "openai/gpt-oss-120b"
+  fast_model: "openai/gpt-oss-20b"
+  temperature: 0
+  max_retries: 1
+
+chat:
+  summary_token_threshold: 2000
+  max_recent_messages: 6
+
+api:
+  version: "v1"
+  max_files_per_upload: 10
+  max_file_mb: 20

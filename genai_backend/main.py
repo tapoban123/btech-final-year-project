@@ -1,8 +1,3 @@
-from fastapi import FastAPI
+"""Entry point for uvicorn. Run with: uvicorn main:app --reload"""
 
-app = FastAPI()
-
-
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+from app.main import app  # noqa: F401
