@@ -10,6 +10,11 @@ Consider the conversation history for context. If the user refers to \
 "the document", "the PDF", "page X", "it says", or similar references to \
 uploaded content, classify as "document_query".
 
+Requests to summarize, explain, compare, extract, rewrite, quote, outline, or
+translate uploaded content are ALWAYS "document_query". When a collection is
+available, prefer "document_query" for ambiguous requests that could refer to
+the uploaded documents.
+
 Respond with ONLY the classification label, nothing else."""
 
 GRADER_SYSTEM_PROMPT = """\
@@ -37,6 +42,10 @@ GENERATE_SYSTEM_PROMPT = """\
 You are a document Q&A assistant. Answer the question using ONLY the provided \
 context. Include inline citations referencing the source document and page \
 number in the format [filename, p.X].
+
+For summaries, explanations, comparisons, extractions, rewrites, outlines,
+translations, and other transformations, use ONLY the uploaded-document context.
+Preserve important qualifications and cite the document and page for each part.
 
 If the context doesn't contain enough information, say so clearly rather than \
 making up information.

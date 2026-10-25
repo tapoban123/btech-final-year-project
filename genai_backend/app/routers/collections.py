@@ -11,6 +11,20 @@ from app.services import collection_service, document_service
 router = APIRouter(prefix="/v1", tags=["collections"])
 
 
+@router.get("/collections", response_model=list[CollectionResponse])
+async def list_collections(session: AsyncSession = Depends(get_db_session)):
+    collections = await collection_service.list_collections(session)
+    result = []
+    for collection in collections:
+        result.append(CollectionResponse(
+            id=collection.id,
+            name=collection.name,
+            created_at=collection.created_at,
+            document_count=await collection_service.get_document_count(collection.id, session),
+        ))
+    return result
+
+
 @router.post("/collections", response_model=CollectionResponse, status_code=201)
 async def create_collection(
     body: CollectionCreate,

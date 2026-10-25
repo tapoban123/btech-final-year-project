@@ -1,9 +1,11 @@
+"""OmniDoc ChatGPT-style document chat UI.
+
+Run with: streamlit run streamlit_ui.py
 """
-OmniDoc AI — Streamlit UI
-Run:  streamlit run streamlit_ui.py
-Requires: pip install streamlit httpx
-Connects to FastAPI backend at http://127.0.0.1:8000
-"""
+
+from __future__ import annotations
+
+import time
 
 import httpx
 import streamlit as st
@@ -12,211 +14,197 @@ API = "http://127.0.0.1:8000"
 
 st.set_page_config(page_title="OmniDoc AI", page_icon="🤖", layout="wide")
 
+for key, default in {
+    "chat_id": None,
+    "chat_messages": [],
+    "collections": [],
+    "auto_collection_attempted": False,
+}.items():
+    st.session_state.setdefault(key, default)
 
-# ── Session state defaults ──────────────────────────────────────────────
-if "chat_id" not in st.session_state:
-    st.session_state.chat_id = None
-if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = []
-if "collections" not in st.session_state:
-    st.session_state.collections = []
 
-
-# ── Helpers ─────────────────────────────────────────────────────────────
 def api_get(path: str, **kwargs):
     try:
-        r = httpx.get(f"{API}{path}", timeout=30, **kwargs)
-        r.raise_for_status()
-        return r.json()
-    except httpx.HTTPStatusError as e:
-        st.error(f"API error {e.response.status_code}: {e.response.text}")
-        return None
+        response = httpx.get(f"{API}{path}", timeout=30, **kwargs)
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        st.error(f"API error {exc.response.status_code}: {exc.response.text}")
     except httpx.ConnectError:
         st.error("Cannot connect to backend. Is uvicorn running on port 8000?")
-        return None
+    return None
 
 
 def api_post(path: str, **kwargs):
     try:
-        r = httpx.post(f"{API}{path}", timeout=60, **kwargs)
-        r.raise_for_status()
-        return r.json()
-    except httpx.HTTPStatusError as e:
-        st.error(f"API error {e.response.status_code}: {e.response.text}")
-        return None
+        response = httpx.post(f"{API}{path}", timeout=60, **kwargs)
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        st.error(f"API error {exc.response.status_code}: {exc.response.text}")
     except httpx.ConnectError:
         st.error("Cannot connect to backend. Is uvicorn running on port 8000?")
-        return None
+    return None
 
 
-# ── Sidebar ─────────────────────────────────────────────────────────────
+def refresh_collections() -> None:
+    collections = api_get("/v1/collections")
+    if collections is not None:
+        st.session_state.collections = [
+            {"id": item["id"], "name": item["name"]} for item in collections
+        ]
+
+    if not st.session_state.collections and not st.session_state.auto_collection_attempted:
+        st.session_state.auto_collection_attempted = True
+        created = api_post("/v1/collections", json={"name": "My documents"})
+        if created:
+            st.session_state.collections = [{
+                "id": created["id"], "name": created["name"],
+            }]
+
+
+def render_sources(sources: list[dict], sources_by_action: dict[str, list[dict]]) -> None:
+    groups = sources_by_action or {"Sources": sources}
+    for action, action_sources in groups.items():
+        if action != "Sources":
+            st.caption(action.replace("_", " "))
+        for source in action_sources:
+            if source.get("type") == "document":
+                filename, page = source.get("filename"), source.get("page")
+                if filename and isinstance(page, int):
+                    st.write(f"📄 {filename} · page {page}")
+                elif filename:
+                    st.write(f"📄 {filename}")
+            elif source.get("url"):
+                label = source.get("title") or source["url"]
+                st.markdown(f"🌐 [{label}]({source['url']})")
+
+
+def upload_files(collection_id: str, files) -> list[dict]:
+    payload = [
+        ("files", (uploaded.name, uploaded.getvalue(), uploaded.type or "application/octet-stream"))
+        for uploaded in files
+    ]
+    return api_post(f"/v1/collections/{collection_id}/documents", files=payload) or []
+
+
+def wait_for_ingestion(job_ids: list[str]) -> bool:
+    if not job_ids:
+        return True
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        statuses = [api_get(f"/v1/jobs/{job_id}") for job_id in job_ids]
+        if any(status is None for status in statuses):
+            return False
+        if any(status.get("status") == "failed" for status in statuses):
+            return False
+        if all(status.get("status") == "completed" for status in statuses):
+            return True
+        time.sleep(1)
+    return False
+
+
+def load_thread(chat_id: str) -> None:
+    history = api_get(f"/v1/chats/{chat_id}")
+    if history:
+        st.session_state.chat_id = history["chat_id"]
+        st.session_state.chat_messages = history.get("messages", [])
+        st.session_state.active_collection_id = history.get("collection_id")
+
+
+refresh_collections()
+
+# The sidebar is intentionally only thread navigation.
 with st.sidebar:
     st.title("🤖 OmniDoc AI")
-    st.caption("Multimodal Document Q&A with RAG")
-    st.divider()
-
-    # Health check
-    if st.button("Check Backend Status"):
-        data = api_get("/v1/health")
-        if data:
-            st.success(f"✅ {data['service']} v{data['version']} — {data['status']}")
+    if st.button("＋ New chat", width="stretch"):
+        st.session_state.chat_id = None
+        st.session_state.chat_messages = []
+        st.rerun()
 
     st.divider()
-
-    # Create collection
-    st.subheader("Collections")
-    col_name = st.text_input("New collection name", placeholder="e.g. my-docs")
-    if st.button("Create Collection", disabled=not col_name):
-        data = api_post("/v1/collections", json={"name": col_name})
-        if data:
-            st.session_state.collections.append({"id": data["id"], "name": data["name"]})
-            st.success(f"Created: **{data['name']}**")
-            st.code(data["id"], language=None)
-
-    # Show saved collections
-    if st.session_state.collections:
-        st.markdown("**Saved collections:**")
-        for c in st.session_state.collections:
-            st.text(f"📁 {c['name']}\n   {c['id']}")
-
-
-# ── Main area with tabs ─────────────────────────────────────────────────
-tab_upload, tab_chat = st.tabs(["📤 Upload", "💬 Chat"])
-
-# Collection selector helper
-col_options = {c["name"]: c["id"] for c in st.session_state.collections}
-
-
-# ── Upload Tab ──────────────────────────────────────────────────────────
-with tab_upload:
-    st.header("Upload Documents")
-
-    if not col_options:
-        st.info("Create a collection in the sidebar first.")
-    else:
-        upload_col = st.selectbox(
-            "Collection", options=list(col_options.keys()), key="upload_col"
-        )
-        upload_col_id = col_options[upload_col]
-
-        uploaded_files = st.file_uploader(
-            "Choose files", type=["pdf", "txt", "docx"],
-            accept_multiple_files=True,
-        )
-
-        if st.button("Upload", disabled=not uploaded_files):
-            files = [("files", (f.name, f.getvalue(), f.type)) for f in uploaded_files]
-            try:
-                r = httpx.post(
-                    f"{API}/v1/collections/{upload_col_id}/documents",
-                    files=files,
-                    timeout=60,
-                )
-                r.raise_for_status()
-                results = r.json()
-                for res in results:
-                    st.success(f"✅ **{res['filename']}** uploaded — Job: `{res['job_id']}`")
-
-                # Poll jobs
-                import time
-                progress_bars = {}
-                job_ids = [res["job_id"] for res in results]
-
-                status_container = st.container()
-                all_done = False
-                while not all_done:
-                    all_done = True
-                    for job_id in job_ids:
-                        job = api_get(f"/v1/jobs/{job_id}")
-                        if not job:
-                            continue
-                        pct = int((job.get("progress", 0)) * 100)
-                        status = job.get("status", "unknown")
-
-                        if job_id not in progress_bars:
-                            progress_bars[job_id] = status_container.progress(0, text=f"Job {job_id[:8]}…")
-
-                        if status == "completed":
-                            progress_bars[job_id].progress(100, text=f"✅ Complete")
-                        elif status == "failed":
-                            progress_bars[job_id].progress(pct, text=f"❌ Failed: {job.get('error_message', '')}")
-                        else:
-                            all_done = False
-                            progress_bars[job_id].progress(pct, text=f"⏳ {status} ({pct}%)")
-
-                    if not all_done:
-                        time.sleep(2)
-
-            except httpx.HTTPStatusError as e:
-                st.error(f"Upload failed: {e.response.text}")
-            except httpx.ConnectError:
-                st.error("Cannot connect to backend.")
-
-
-# ── Chat Tab ────────────────────────────────────────────────────────────
-with tab_chat:
-    st.header("Chat with Documents")
-
-    if not col_options:
-        st.info("Create a collection in the sidebar first.")
-    else:
-        chat_col = st.selectbox(
-            "Collection", options=list(col_options.keys()), key="chat_col"
-        )
-        chat_col_id = col_options[chat_col]
-
-        # Clear chat button
-        if st.button("Clear Chat"):
-            st.session_state.chat_messages = []
-            st.session_state.chat_id = None
+    st.caption("Threads")
+    threads = api_get("/v1/chats") or []
+    if not threads:
+        st.caption("No saved threads yet.")
+    for thread in threads:
+        title = thread.get("title") or "New chat"
+        if st.button(title, key=f"thread_{thread['chat_id']}", width="stretch"):
+            load_thread(thread["chat_id"])
             st.rerun()
 
-        # Display messages
-        for msg in st.session_state.chat_messages:
-            with st.chat_message(msg["role"]):
-                st.write(msg["content"])
-                if msg.get("sources"):
-                    with st.expander("Sources"):
-                        for s in msg["sources"]:
-                            icon = "🌐" if s.get("type") == "web" else "📄"
-                            name = s.get("filename") or s.get("title") or s.get("url") or ""
-                            st.markdown(f"{icon} {name}")
 
-        # Chat input
-        if prompt := st.chat_input("Ask something..."):
-            st.session_state.chat_messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.write(prompt)
+collection_id = st.session_state.get("active_collection_id")
+if not collection_id and st.session_state.collections:
+    collection_id = st.session_state.collections[0]["id"]
+    st.session_state.active_collection_id = collection_id
 
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    data = api_post("/v1/chat", json={
-                        "collection_id": chat_col_id,
+st.title("Chat with your documents")
+st.caption("Attach a PDF or image with the paperclip, then ask a question about it.")
+
+for message in st.session_state.chat_messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+        if message.get("sources") or message.get("sources_by_action"):
+            with st.expander("Sources"):
+                render_sources(message.get("sources", []), message.get("sources_by_action", {}))
+
+
+submission = st.chat_input(
+    "Message OmniDoc…",
+    accept_file="multiple",
+    file_type=["pdf", "png", "jpg", "jpeg"],
+)
+
+if submission:
+    prompt = getattr(submission, "text", None)
+    attached_files = list(getattr(submission, "files", []) or [])
+    if prompt is None:
+        prompt = str(submission)
+    prompt = prompt.strip()
+
+    if not collection_id:
+        st.error("A document collection could not be created. Check the backend connection.")
+        st.stop()
+
+    if attached_files:
+        upload_results = upload_files(collection_id, attached_files)
+        ready = wait_for_ingestion([item["job_id"] for item in upload_results])
+        if not ready:
+            st.error("The attachment could not be indexed. Please try again.")
+            st.stop()
+        with st.chat_message("assistant"):
+            st.success(f"Uploaded {len(attached_files)} document(s).")
+
+    if prompt:
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking…"):
+                data = api_post(
+                    "/v1/chat",
+                    json={
+                        "collection_id": collection_id,
                         "message": prompt,
                         "chat_id": st.session_state.chat_id,
-                    })
-
-                if data:
-                    st.session_state.chat_id = data.get("chat_id")
-                    answer = data.get("answer", "No response")
-                    st.write(answer)
-
-                    sources = data.get("sources", [])
-                    if sources:
-                        with st.expander("Sources"):
-                            for s in sources:
-                                icon = "🌐" if s.get("type") == "web" else "📄"
-                                name = s.get("filename") or s.get("title") or s.get("url") or ""
-                                st.markdown(f"{icon} {name}")
-
-                    st.session_state.chat_messages.append({
-                        "role": "assistant",
-                        "content": answer,
-                        "sources": sources,
-                    })
-                else:
-                    st.write("Error getting response")
-                    st.session_state.chat_messages.append({
-                        "role": "assistant",
-                        "content": "Error getting response",
-                    })
+                    },
+                )
+            if data:
+                st.session_state.chat_id = data.get("chat_id")
+                answer = data.get("answer", "No response")
+                sources = data.get("sources", [])
+                sources_by_action = data.get("sources_by_action", {})
+                st.write(answer)
+                if sources or sources_by_action:
+                    with st.expander("Sources"):
+                        render_sources(sources, sources_by_action)
+                st.session_state.chat_messages.append({
+                    "role": "assistant",
+                    "content": answer,
+                    "sources": sources,
+                    "sources_by_action": sources_by_action,
+                })
+            else:
+                st.error("No response from the backend.")

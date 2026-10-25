@@ -57,7 +57,7 @@ async def init_services(app: FastAPI, settings: Settings, config: PipelineConfig
         config=config.retrieval,
     )
 
-    chat_manager = ChatManager()
+    chat_manager = ChatManager(settings.upload_dir / "chats.json")
 
     query_graph = build_query_graph(
         retriever=retriever,

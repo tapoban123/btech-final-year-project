@@ -64,6 +64,8 @@ class WebSearchConfig(BaseModel):
 class LlmConfig(BaseModel):
     main_model: str = "openai/gpt-oss-120b"
     fast_model: str = "openai/gpt-oss-20b"
+    # Keep OCR on a multimodal model; the main answer model is text-only.
+    vision_model: str = "qwen/qwen3.8-27b"
     temperature: float = 0
     max_retries: int = 1
 

@@ -40,7 +40,7 @@ async def ingest_document(
         await on_progress(0.2, "processing")
 
     paddle = PaddleOcrProvider()
-    vision = VisionLlmOcrProvider(model=config.llm.main_model)
+    vision = VisionLlmOcrProvider(model=config.llm.vision_model)
 
     all_chunks: list[Document] = []
     semaphore = asyncio.Semaphore(config.ocr.max_parallel_pages)

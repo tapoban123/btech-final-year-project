@@ -31,6 +31,7 @@ class QueryRequest(BaseModel):
 class AnswerResponse(BaseModel):
     answer: str
     sources: list[Source] = []
+    sources_by_action: dict[str, list[Source]] = Field(default_factory=dict)
     route: str = "docs"
     verdict: Verdict = Verdict(grounded=True, answers_question=True)
     retries: int = 0

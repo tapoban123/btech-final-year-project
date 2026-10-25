@@ -30,22 +30,48 @@ async def ocr_page(
     if page_info.image_bytes is None:
         return "", False, 0.0
 
-    processed = preprocess_image(page_info.image_bytes)
+    # Keep the original bytes available: preprocessing can fail on unusual
+    # handwritten scans, but the vision model can still often read the source.
+    try:
+        processed = preprocess_image(page_info.image_bytes)
+    except Exception as exc:
+        logger.warning(
+            "Page %d: image preprocessing failed (%s); forcing vision OCR",
+            page_info.page_num, exc,
+        )
+        processed = page_info.image_bytes
 
-    text, confidence = await paddle.ocr(processed)
+    # Vision OCR is the primary path for image-only pages so handwriting is not
+    # first reduced to potentially incorrect printed OCR.
+    try:
+        vision_text, vision_conf = await vision.ocr(processed)
+    except Exception as exc:
+        logger.warning("Page %d: primary vision OCR failed: %s", page_info.page_num, exc)
+        vision_text, vision_conf = "", 0.0
+    if vision_text.strip():
+        return vision_text, True, vision_conf
 
-    if confidence < handwriting_conf_threshold and text.strip():
+    logger.warning(
+        "Page %d: primary vision OCR returned no text; falling back to PaddleOCR",
+        page_info.page_num,
+    )
+    try:
+        text, confidence = await paddle.ocr(processed)
+    except Exception as exc:
+        logger.error("Page %d: fallback printed OCR failed: %s", page_info.page_num, exc)
+        return "", True, 0.0
+
+    if confidence < handwriting_conf_threshold:
         logger.info(
-            "Page %d: low printed OCR confidence (%.2f), trying vision LLM",
+            "Page %d: fallback printed OCR confidence %.2f is unreliable",
             page_info.page_num,
             confidence,
         )
-        vision_text, vision_conf = await vision.ocr(processed)
-        if vision_text:
-            return vision_text, True, vision_conf
-
-    if not text.strip():
-        vision_text, vision_conf = await vision.ocr(processed)
-        return vision_text, True, vision_conf
+        # Vision was already attempted first; do not index unreliable Paddle text.
+        logger.error(
+            "Page %d: no reliable transcription available after vision and Paddle OCR",
+            page_info.page_num,
+        )
+        return "", True, 0.0
 
     return text, True, confidence

@@ -61,9 +61,13 @@ class VisionLlmOcrProvider:
                 {
                     "type": "text",
                     "text": (
-                        "Transcribe all text from this image exactly as written. "
-                        "Preserve line breaks and formatting. "
-                        "Output only the transcribed text, nothing else."
+                        "You are the mandatory fallback OCR for a document page. "
+                        "Transcribe all printed and handwritten text in this image "
+                        "exactly as written. Pay special attention to handwriting, "
+                        "faint strokes, and mixed handwritten/printed content. "
+                        "Preserve line breaks and formatting. Do not summarize, "
+                        "explain, or invent unreadable text. Output only the "
+                        "transcribed text, nothing else."
                     ),
                 },
                 {
@@ -75,7 +79,15 @@ class VisionLlmOcrProvider:
 
         try:
             response = await llm.ainvoke([message])
-            text = response.content.strip()
+            content = response.content
+            if isinstance(content, list):
+                text = "\n".join(
+                    item.get("text", "")
+                    for item in content
+                    if isinstance(item, dict) and item.get("type") == "text"
+                ).strip()
+            else:
+                text = str(content).strip()
             return text, 0.7
         except Exception as e:
             logger.error("Vision LLM OCR failed: %s", e)

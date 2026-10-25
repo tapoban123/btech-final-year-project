@@ -22,6 +22,7 @@ class GraphState(TypedDict, total=False):
     # Generation fields
     answer: str
     sources: list[dict]
+    sources_by_action: dict[str, list[dict]]
     verdict: dict
     judge_feedback: str
     route: str

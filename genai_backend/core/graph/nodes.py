@@ -16,6 +16,7 @@ from core.graph.prompts import (
     JUDGE_SYSTEM_PROMPT,
     CHAT_RESPONSE_PROMPT,
 )
+from core.graph.source_tracking import build_source_tracking, unique_sources
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,17 @@ def make_classify_intent(fast_llm):
         response = await fast_llm.ainvoke([HumanMessage(content=prompt)])
         text = response.content.strip().lower()
 
-        intent = "document_query" if "document" in text else "general_chat"
+        document_terms = (
+            "document", "pdf", "file", "page", "uploaded", "summarize",
+            "summary", "summarise", "explain", "compare", "extract", "quote",
+            "outline", "rewrite", "translate", "according to", "in the notes",
+        )
+        query_text = state.get("query", "").lower()
+        intent = (
+            "document_query"
+            if "document" in text or any(term in query_text for term in document_terms)
+            else "general_chat"
+        )
         return {"intent": intent}
 
     return classify_intent
@@ -188,19 +199,22 @@ def make_generate(main_llm):
         if quality != "incorrect":
             for doc in relevant_chunks:
                 meta = doc.metadata
-                fname = meta.get("filename", "unknown")
-                page = meta.get("page", "?")
+                fname = meta.get("filename")
+                page = meta.get("page")
                 ocr_conf = meta.get("ocr_confidence", 1.0)
 
-                header = f"[{fname}, p.{page}]"
+                header = f"[{fname}, p.{page}]" if fname and isinstance(page, int) else "[Document source]"
                 if ocr_conf < 0.4:
                     header += " (low OCR confidence — text may have errors)"
 
                 context_parts.append(f"{header}\n{doc.page_content}")
 
         for wr in web_results:
+            url = wr.get("url")
+            label = wr.get("title", "untitled")
+            header = f"[Web: {label} | {url}]" if url else f"[Web: {label}]"
             context_parts.append(
-                f"[Web: {wr.get('title', 'untitled')}]\n{wr.get('content', '')}"
+                f"{header}\n{wr.get('content', '')}"
             )
 
         context = "\n\n---\n\n".join(context_parts) if context_parts else "No context available."
@@ -232,25 +246,22 @@ def make_generate(main_llm):
         response = await main_llm.ainvoke(messages)
         answer = response.content.strip()
 
-        sources = []
-        for doc in relevant_chunks:
-            meta = doc.metadata
-            sources.append({
-                "type": "document",
-                "doc_id": meta.get("doc_id", ""),
-                "filename": meta.get("filename", ""),
-                "page": meta.get("page"),
-                "chunk_id": meta.get("chunk_id", ""),
-                "ocr": meta.get("ocr", False),
-                "ocr_confidence": meta.get("ocr_confidence"),
-            })
-
-        for wr in web_results:
-            sources.append({
-                "type": "web",
-                "url": wr.get("url", ""),
-                "title": wr.get("title", ""),
-            })
+        current_sources, current_sources_by_action = build_source_tracking(
+            (doc.metadata for doc in relevant_chunks), web_results,
+            corrective=state.get("rewrite_count", 0) > 0,
+            self_rag=gen_count > 0,
+        )
+        # `sources` is the query-scoped resource ledger. Keep prior actions
+        # visible on retries while retaining only one public record per resource.
+        sources = unique_sources([*state.get("sources", []), *current_sources])
+        sources_by_action = {
+            action: unique_sources(action_sources)
+            for action, action_sources in state.get("sources_by_action", {}).items()
+        }
+        for action, action_sources in current_sources_by_action.items():
+            sources_by_action[action] = unique_sources([
+                *sources_by_action.get(action, []), *action_sources,
+            ])
 
         route = "docs"
         if web_results and relevant_chunks:
@@ -261,6 +272,7 @@ def make_generate(main_llm):
         return {
             "answer": answer,
             "sources": sources,
+            "sources_by_action": sources_by_action,
             "route": route,
             "generation_count": gen_count + 1,
         }
@@ -295,6 +307,7 @@ def make_chat_respond(main_llm):
         return {
             "answer": response.content.strip(),
             "sources": [],
+            "sources_by_action": {},
             "route": "chat",
             "verdict": {"grounded": True, "answers_question": True},
             "generation_count": 1,

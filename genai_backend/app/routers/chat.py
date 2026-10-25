@@ -5,11 +5,30 @@ import time
 from fastapi import APIRouter, Request
 
 from app.errors import generate_request_id
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatHistoryResponse, ChatListItem, ChatRequest, ChatResponse
 from app.schemas.query import Source, Verdict
 from core.llm import get_fast_llm
 
 router = APIRouter(prefix="/v1", tags=["chat"])
+
+
+@router.get("/chats", response_model=list[ChatListItem])
+async def list_chats(request: Request):
+    return request.app.state.chat_manager.list_threads()
+
+
+@router.get("/chats/{chat_id}", response_model=ChatHistoryResponse)
+async def get_chat_history(chat_id: str, request: Request):
+    thread = request.app.state.chat_manager.get_thread(chat_id)
+    if thread is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return ChatHistoryResponse(
+        chat_id=thread["chat_id"],
+        collection_id=thread.get("collection_id"),
+        title=thread.get("title") or "New chat",
+        messages=thread.get("messages", []),
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -44,6 +63,7 @@ async def chat(
         "retrieval_quality": "incorrect",
         "answer": "",
         "sources": [],
+        "sources_by_action": {},
         "verdict": {},
         "judge_feedback": "",
         "route": "docs",
@@ -70,6 +90,8 @@ async def chat(
         answer,
         llm=fast_llm,
         summary_threshold=config.chat.summary_token_threshold,
+        assistant_sources=result.get("sources", []),
+        assistant_sources_by_action=result.get("sources_by_action", {}),
     )
 
     verdict_data = result.get("verdict", {})
@@ -78,6 +100,10 @@ async def chat(
         chat_id=chat_id,
         answer=answer,
         sources=[Source(**s) for s in result.get("sources", [])],
+        sources_by_action={
+            action: [Source(**source) for source in sources]
+            for action, sources in result.get("sources_by_action", {}).items()
+        },
         route=result.get("route", "chat"),
         verdict=Verdict(
             grounded=verdict_data.get("grounded", True),
