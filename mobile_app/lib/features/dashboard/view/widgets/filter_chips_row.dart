@@ -18,12 +18,12 @@ class FilterChipsRow extends StatelessWidget {
     final chips = [
       _FilterOption(
         category: DocumentFilterCategory.all,
-        label: 'All Entities',
+        label: 'All',
         icon: Icons.check,
       ),
       _FilterOption(
         category: DocumentFilterCategory.reports,
-        label: 'Reports',
+        label: 'Documents',
         icon: Icons.picture_as_pdf_outlined,
       ),
       _FilterOption(
@@ -33,7 +33,7 @@ class FilterChipsRow extends StatelessWidget {
       ),
       _FilterOption(
         category: DocumentFilterCategory.diagrams,
-        label: 'Diagrams',
+        label: 'Images',
         icon: Icons.image_outlined,
       ),
     ];

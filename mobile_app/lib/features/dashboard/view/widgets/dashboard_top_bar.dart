@@ -34,36 +34,14 @@ class DashboardTopBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Brand & HUB Badge
+              // Brand
               Row(
                 children: [
                   Text(
-                    'OmniDoc',
+                    'OmniDoc AI',
                     style: AppTypography.titleMd.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8.0,
-                      vertical: 2.0,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.outlineVariant,
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      'HUB',
-                      style: AppTypography.labelSm.copyWith(
-                        color: AppColors.secondary,
-                        fontWeight: FontWeight.w600,
-                      ),
                     ),
                   ),
                 ],

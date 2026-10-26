@@ -38,8 +38,8 @@ class DashboardBottomNav extends StatelessWidget {
                 onTap: () => onTabSelected(0),
               ),
               _NavItem(
-                icon: Icons.upload_file_outlined,
-                label: 'Upload',
+                icon: Icons.search,
+                label: 'Search',
                 isActive: currentIndex == 1,
                 onTap: () => onTabSelected(1),
               ),
@@ -48,12 +48,6 @@ class DashboardBottomNav extends StatelessWidget {
                 label: 'Chat',
                 isActive: currentIndex == 2,
                 onTap: () => onTabSelected(2),
-              ),
-              _NavItem(
-                icon: Icons.search,
-                label: 'Search',
-                isActive: currentIndex == 3,
-                onTap: () => onTabSelected(3),
               ),
             ],
           ),

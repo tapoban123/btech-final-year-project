@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/app_formatters.dart';
 
 class BatchActionBar extends StatelessWidget {
   final int selectedCount;
@@ -41,7 +42,7 @@ class BatchActionBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '$selectedCount file${selectedCount > 1 ? 's' : ''} selected',
+                '${AppFormatters.formatCountWithNoun(selectedCount, 'file')} selected',
                 style: AppTypography.labelMd.copyWith(
                   color: AppColors.onSurface,
                   fontWeight: FontWeight.w600,

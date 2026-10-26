@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../chat/blocs/chat_bloc.dart';
+import '../../../chat/view/screens/chat_screen.dart';
+import '../../../search/view/screens/search_screen.dart';
+import '../../../upload/view/screens/upload_screen.dart';
 import '../../blocs/dashboard_bloc.dart';
 import '../../blocs/dashboard_event.dart';
 import '../../blocs/dashboard_state.dart';
@@ -11,8 +15,8 @@ import '../widgets/dashboard_fab.dart';
 import '../widgets/dashboard_top_bar.dart';
 import '../widgets/document_card.dart';
 import '../widgets/filter_chips_row.dart';
-import '../widgets/metrics_bento_strip.dart';
 import '../widgets/multimodal_search_bar.dart';
+import '../../../../core/utils/app_formatters.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,18 +26,10 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
     context.read<DashboardBloc>().add(const LoadDashboardData());
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   @override
@@ -42,138 +38,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context, state) {
         return Scaffold(
           backgroundColor: AppColors.surfaceContainerLowest,
-          appBar: DashboardTopBar(
-            onProfileTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Executive Profile: ED (Administrator)'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            onOptionsTap: () {
-              _showMoreOptionsModal(context);
-            },
-          ),
-          body: Stack(
+          body: IndexedStack(
+            index: state.currentNavIndex,
             children: [
-              // Scrollable content area
-              RefreshIndicator(
-                color: AppColors.secondary,
-                backgroundColor: AppColors.surfaceContainerLowest,
-                onRefresh: () async {
-                  context.read<DashboardBloc>().add(const LoadDashboardData());
+              // Tab 0: Home / Library View
+              _buildHomeTab(context, state),
+
+              // Tab 1: Semantic Search & Similarity View
+              SearchScreen(
+                onNavigateToTab: (idx) {
+                  context.read<DashboardBloc>().add(ChangeNavigationTab(idx));
                 },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 16.0,
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 480),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 1. Multimodal Global Search Bar
-                          MultimodalSearchBar(
-                            controller: _searchController,
-                            onChanged: (val) {
-                              context
-                                  .read<DashboardBloc>()
-                                  .add(UpdateSearchQuery(val));
-                            },
-                            onVoiceQueryTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Voice Query Listener Activated...'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          // 2. Filter Category Chips
-                          FilterChipsRow(
-                            selectedCategory: state.selectedFilter,
-                            onSelected: (cat) {
-                              context
-                                  .read<DashboardBloc>()
-                                  .add(ChangeFilterCategory(cat));
-                            },
-                          ),
-                          const SizedBox(height: 20),
-
-                          // 3. Multimodal Intelligence Summary Bento Strip
-                          MetricsBentoStrip(metrics: state.metrics),
-                          const SizedBox(height: 24),
-
-                          // 4. Section Header: My Library & Selection Status
-                          _buildLibraryHeader(context, state),
-                          const SizedBox(height: 12),
-
-                          // 5. Document List Cards
-                          _buildDocumentList(context, state),
-                          const SizedBox(height: 16),
-
-                          // 6. Selection Mode Batch Action Bar
-                          if (state.hasSelection) ...[
-                            BatchActionBar(
-                              selectedCount: state.selectedCount,
-                              onQueryTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Querying AI with ${state.selectedCount} selected document(s)...',
-                                    ),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              },
-                              onExportTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Exporting ${state.selectedCount} document(s)...',
-                                    ),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-
-                          // Extra padding for FAB and bottom navbar
-                          const SizedBox(height: 80),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
               ),
 
-              // Floating Action Button
-              Positioned(
-                bottom: 16,
-                right: 16,
-                child: DashboardFab(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Open File Ingestion & OCR Scanner'),
-                        duration: Duration(seconds: 2),
-                      ),
+              // Tab 2: AI Chat & RAG Assistant
+              Builder(
+                builder: (ctx) {
+                  try {
+                    ctx.read<ChatBloc>();
+                    return ChatScreen(
+                      showBottomNav: false,
+                      onBackTap: () {
+                        context
+                            .read<DashboardBloc>()
+                            .add(const ChangeNavigationTab(0));
+                      },
                     );
-                  },
-                ),
+                  } catch (_) {
+                    return const SizedBox.shrink();
+                  }
+                },
               ),
             ],
           ),
+          floatingActionButton: state.currentNavIndex == 0
+              ? DashboardFab(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const UploadScreen()),
+                    );
+                  },
+                )
+              : null,
           bottomNavigationBar: DashboardBottomNav(
             currentIndex: state.currentNavIndex,
             onTabSelected: (index) {
@@ -182,6 +89,110 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildHomeTab(BuildContext context, DashboardState state) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceContainerLowest,
+      appBar: DashboardTopBar(
+        onProfileTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Executive Profile: ED (Administrator)'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        },
+        onOptionsTap: () {
+          _showMoreOptionsModal(context);
+        },
+      ),
+      body: RefreshIndicator(
+            color: AppColors.secondary,
+            backgroundColor: AppColors.surfaceContainerLowest,
+            onRefresh: () async {
+              context.read<DashboardBloc>().add(const LoadDashboardData());
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 16.0,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. Clickable Search Bar (Navigates to Semantic Search Screen)
+                      MultimodalSearchBar(
+                        onTap: () {
+                          context
+                              .read<DashboardBloc>()
+                              .add(const ChangeNavigationTab(1));
+                        },
+                        onVoiceQueryTap: () {
+                          context
+                              .read<DashboardBloc>()
+                              .add(const ChangeNavigationTab(1));
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // 2. Filter Category Chips
+                      FilterChipsRow(
+                        selectedCategory: state.selectedFilter,
+                        onSelected: (cat) {
+                          context
+                              .read<DashboardBloc>()
+                              .add(ChangeFilterCategory(cat));
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 3. Section Header: My Library & Selection Status
+                      _buildLibraryHeader(context, state),
+                      const SizedBox(height: 12),
+
+                      // 5. Document List Cards
+                      _buildDocumentList(context, state),
+                      const SizedBox(height: 16),
+
+                      // 6. Selection Mode Batch Action Bar
+                      if (state.hasSelection) ...[
+                        BatchActionBar(
+                          selectedCount: state.selectedCount,
+                          onQueryTap: () {
+                            context
+                                .read<DashboardBloc>()
+                                .add(const ChangeNavigationTab(2));
+                          },
+                          onExportTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Exporting ${state.selectedCount} document(s)...',
+                                ),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Extra padding for FAB and bottom navbar
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
     );
   }
 
@@ -211,7 +222,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               child: Text(
-                '${state.documents.length} files',
+                AppFormatters.formatCountWithNoun(state.documents.length, 'file'),
                 style: AppTypography.labelSm.copyWith(
                   color: AppColors.outline,
                   fontWeight: FontWeight.w500,
@@ -228,7 +239,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 8.0),
                 child: Text(
-                  '${state.selectedCount} SELECTED',
+                  '${AppFormatters.formatNumber(state.selectedCount)} SELECTED',
                   style: AppTypography.labelSm.copyWith(
                     color: AppColors.secondary,
                     fontWeight: FontWeight.w700,
@@ -419,7 +430,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ListTile(
                 leading: const Icon(Icons.chat_outlined),
                 title: const Text('Chat with this Document'),
-                onTap: () => Navigator.pop(ctx),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context
+                      .read<DashboardBloc>()
+                      .add(const ChangeNavigationTab(2));
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: AppColors.error),
