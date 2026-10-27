@@ -66,5 +66,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>OmniDoc needs access to your photo library to select documents, images, and diagrams for semantic search and indexing.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OmniDoc needs access to your microphone to record voice memos for transcription and multimodal RAG.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

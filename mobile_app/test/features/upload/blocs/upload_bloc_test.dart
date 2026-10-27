@@ -11,6 +11,10 @@ import 'package:mobile_app/features/upload/repository/upload_repository.dart';
 class MockUploadRepository extends Mock implements IUploadRepository {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(DocumentType.pdf);
+  });
+
   late MockUploadRepository mockRepository;
 
   final sampleUploads = [
@@ -32,9 +36,9 @@ void main() {
       final bloc = UploadBloc(repository: mockRepository);
       expect(bloc.state.status, UploadScreenStatus.initial);
       expect(bloc.state.recentUploads, isEmpty);
-      expect(bloc.state.isRecording, isTrue);
-      expect(bloc.state.recordingDurationSeconds, 165);
-      expect(bloc.state.formattedDuration, '02:45');
+      expect(bloc.state.isRecording, isFalse);
+      expect(bloc.state.recordingDurationSeconds, 0);
+      expect(bloc.state.formattedDuration, '00:00');
     });
 
     blocTest<UploadBloc, UploadState>(
@@ -72,8 +76,12 @@ void main() {
     blocTest<UploadBloc, UploadState>(
       'inserts new item when TriggerFileUpload succeeds',
       build: () {
-        when(() => mockRepository.uploadFile('New.pdf', DocumentType.pdf))
-            .thenAnswer(
+        when(() => mockRepository.uploadFile(
+              'New.pdf',
+              DocumentType.pdf,
+              filePath: any(named: 'filePath'),
+              fileSize: any(named: 'fileSize'),
+            )).thenAnswer(
           (_) async => const UploadItem(
             id: 'up_new',
             title: 'New.pdf',
@@ -90,6 +98,53 @@ void main() {
       expect: () => [
         predicate<UploadState>((s) =>
             s.recentUploads.length == 2 && s.recentUploads.first.id == 'up_new'),
+      ],
+    );
+
+    blocTest<UploadBloc, UploadState>(
+      'inserts all items when TriggerMultipleFilesUpload succeeds with multi-select files',
+      build: () {
+        when(() => mockRepository.uploadFile(
+              any(),
+              any(),
+              filePath: any(named: 'filePath'),
+              fileSize: any(named: 'fileSize'),
+            )).thenAnswer(
+          (inv) async => UploadItem(
+            id: 'up_${inv.positionalArguments[0]}',
+            title: inv.positionalArguments[0] as String,
+            type: inv.positionalArguments[1] as DocumentType,
+            stageDescription: 'Queued',
+          ),
+        );
+        return UploadBloc(repository: mockRepository);
+      },
+      seed: () => const UploadState(recentUploads: []),
+      act: (bloc) => bloc.add(
+        const TriggerMultipleFilesUpload([
+          SelectedFileInfo(filename: 'photo1.png', type: DocumentType.image),
+          SelectedFileInfo(filename: 'photo2.jpg', type: DocumentType.image),
+          SelectedFileInfo(filename: 'doc.pdf', type: DocumentType.pdf),
+        ]),
+      ),
+      expect: () => [
+        predicate<UploadState>((s) =>
+            s.recentUploads.length == 3 &&
+            s.recentUploads.any((u) => u.title == 'photo1.png') &&
+            s.recentUploads.any((u) => u.title == 'photo2.jpg') &&
+            s.recentUploads.any((u) => u.title == 'doc.pdf') &&
+            s.status == UploadScreenStatus.success),
+      ],
+    );
+
+    blocTest<UploadBloc, UploadState>(
+      'cancels voice recording and resets duration',
+      build: () => UploadBloc(repository: mockRepository),
+      seed: () =>
+          const UploadState(isRecording: true, recordingDurationSeconds: 45),
+      act: (bloc) => bloc.add(const CancelVoiceRecording()),
+      expect: () => [
+        const UploadState(isRecording: false, recordingDurationSeconds: 0),
       ],
     );
 

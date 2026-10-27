@@ -15,10 +15,10 @@ class UploadState extends Equatable {
   const UploadState({
     this.status = UploadScreenStatus.initial,
     this.recentUploads = const [],
-    this.isRecording = true,
-    this.recordingDurationSeconds = 165, // 02:45
+    this.isRecording = false,
+    this.recordingDurationSeconds = 0,
     this.speechDetectionMessage =
-        'Speech detected: Multimodal vector ingestion live',
+        'Listening: Multimodal vector ingestion live',
     this.errorMessage,
   });
 

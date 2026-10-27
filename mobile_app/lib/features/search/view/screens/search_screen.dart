@@ -28,100 +28,82 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surfaceContainerLowest,
-      appBar: _buildSearchHeader(context),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 1. Search Query Input Field
-                  _buildSearchInputField(),
-                  const SizedBox(height: 16),
+    return SafeArea(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. In-page Header: Semantic Search title & filter action
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryContainer,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.saved_search,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Semantic Search',
+                          style: AppTypography.titleMd.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.tune,
+                        color: AppColors.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      tooltip: 'Search filters',
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Search filters & threshold settings'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
 
-                  // 2. Results Header
-                  _buildResultsHeader(),
-                  const SizedBox(height: 12),
+                // 2. Search Query Input Field
+                _buildSearchInputField(),
+                const SizedBox(height: 16),
 
-                  // 3. Semantic Results List
-                  _buildResultCards(context),
-                  const SizedBox(height: 40),
-                ],
-              ),
+                // 3. Results Header
+                _buildResultsHeader(),
+                const SizedBox(height: 12),
+
+                // 4. Semantic Results List
+                _buildResultCards(context),
+                const SizedBox(height: 40),
+              ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildSearchHeader(BuildContext context) {
-    return AppBar(
-      backgroundColor: AppColors.surfaceContainerLowest,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      automaticallyImplyLeading: false,
-      title: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppColors.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              'OD',
-              style: AppTypography.titleSm.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Semantic Search',
-            style: AppTypography.titleMd.copyWith(
-              color: AppColors.primaryContainer,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.tune, color: AppColors.onSurfaceVariant),
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Search filters & threshold settings'),
-                duration: Duration(seconds: 1),
-              ),
-            );
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: AppColors.onSurfaceVariant),
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Vector index status: Active'),
-                duration: Duration(seconds: 1),
-              ),
-            );
-          },
-        ),
-      ],
-      bottom: const PreferredSize(
-        preferredSize: Size.fromHeight(1),
-        child: Divider(height: 1, color: AppColors.outlineVariant),
       ),
     );
   }

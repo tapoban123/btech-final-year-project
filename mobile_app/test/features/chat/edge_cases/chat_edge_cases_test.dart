@@ -55,7 +55,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('2 Active Contexts'), findsOneWidget);
-      expect(find.text('Grounded'), findsOneWidget);
+      expect(find.text('Manage'), findsOneWidget);
       expect(find.text('Ask questions about the selection...'), findsOneWidget);
     });
 

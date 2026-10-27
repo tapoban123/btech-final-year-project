@@ -14,6 +14,8 @@ class UploadItem extends Equatable {
   final String stageDescription;
   final UploadProcessingStatus status;
   final double? progress;
+  final String? filePath;
+  final int? fileSize;
 
   const UploadItem({
     required this.id,
@@ -22,6 +24,8 @@ class UploadItem extends Equatable {
     required this.stageDescription,
     this.status = UploadProcessingStatus.processing,
     this.progress,
+    this.filePath,
+    this.fileSize,
   });
 
   UploadItem copyWith({
@@ -31,6 +35,8 @@ class UploadItem extends Equatable {
     String? stageDescription,
     UploadProcessingStatus? status,
     double? progress,
+    String? filePath,
+    int? fileSize,
   }) {
     return UploadItem(
       id: id ?? this.id,
@@ -39,6 +45,8 @@ class UploadItem extends Equatable {
       stageDescription: stageDescription ?? this.stageDescription,
       status: status ?? this.status,
       progress: progress ?? this.progress,
+      filePath: filePath ?? this.filePath,
+      fileSize: fileSize ?? this.fileSize,
     );
   }
 
@@ -50,5 +58,7 @@ class UploadItem extends Equatable {
         stageDescription,
         status,
         progress,
+        filePath,
+        fileSize,
       ];
 }

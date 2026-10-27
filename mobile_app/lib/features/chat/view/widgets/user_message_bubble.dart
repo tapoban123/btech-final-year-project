@@ -39,24 +39,13 @@ class UserMessageBubble extends StatelessWidget {
           ),
           const SizedBox(height: 4),
 
-          // Timestamp & Read Status
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                message.timestamp,
-                style: AppTypography.labelSm.copyWith(
-                  color: AppColors.outline,
-                  fontSize: 11,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.done_all,
-                size: 14,
-                color: AppColors.secondary,
-              ),
-            ],
+          // Timestamp
+          Text(
+            message.timestamp,
+            style: AppTypography.labelSm.copyWith(
+              color: AppColors.outline,
+              fontSize: 11,
+            ),
           ),
         ],
       ),

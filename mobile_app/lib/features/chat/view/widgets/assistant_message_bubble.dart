@@ -7,12 +7,16 @@ import 'grounding_citation_card.dart';
 
 class AssistantMessageBubble extends StatelessWidget {
   final ChatMessage message;
+  final VoidCallback? onCopyTap;
+  final VoidCallback? onShareTap;
   final VoidCallback? onAccurateTap;
   final VoidCallback? onExportTap;
 
   const AssistantMessageBubble({
     super.key,
     required this.message,
+    this.onCopyTap,
+    this.onShareTap,
     this.onAccurateTap,
     this.onExportTap,
   });
@@ -47,13 +51,6 @@ class AssistantMessageBubble extends StatelessWidget {
                 style: AppTypography.labelMd.copyWith(
                   color: AppColors.primaryContainer,
                   fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '· Synthesis Complete',
-                style: AppTypography.labelSm.copyWith(
-                  color: AppColors.outline,
                 ),
               ),
             ],
@@ -109,14 +106,14 @@ class AssistantMessageBubble extends StatelessWidget {
             ),
           ],
 
-          // Quick Feedback Action Pill
+          // Quick Action Row: Copy & Share
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.only(left: 4.0),
             child: Row(
               children: [
                 _buildActionItem(
-                  icon: Icons.content_copy,
+                  icon: Icons.content_copy_outlined,
                   label: 'Copy',
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: message.content));
@@ -126,32 +123,27 @@ class AssistantMessageBubble extends StatelessWidget {
                         duration: Duration(seconds: 1),
                       ),
                     );
+                    onCopyTap?.call();
                   },
                 ),
-                _buildDivider(),
-                _buildActionItem(
-                  icon: Icons.thumb_up_outlined,
-                  label: message.isAccurateFeedbackGiven
-                      ? 'Helpful'
-                      : 'Accurate',
-                  textColor: message.isAccurateFeedbackGiven
-                      ? AppColors.secondary
-                      : null,
-                  onTap: onAccurateTap ?? () {},
-                ),
-                _buildDivider(),
+                const SizedBox(width: 16),
                 _buildActionItem(
                   icon: Icons.share_outlined,
-                  label: 'Export memo',
-                  onTap: onExportTap ??
-                      () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Exporting executive memo...'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                  label: 'Share',
+                  onTap: () {
+                    if (onShareTap != null) {
+                      onShareTap!();
+                    } else if (onExportTap != null) {
+                      onExportTap!();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Sharing response...'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ],
             ),
@@ -261,19 +253,6 @@ class AssistantMessageBubble extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Text(
-        '|',
-        style: TextStyle(
-          color: AppColors.outlineVariant,
-          fontSize: 12,
         ),
       ),
     );

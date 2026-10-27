@@ -7,6 +7,7 @@ class VoiceRecordingCard extends StatelessWidget {
   final String formattedTime;
   final String statusMessage;
   final VoidCallback onSaveAndIngest;
+  final VoidCallback? onCancel;
 
   const VoiceRecordingCard({
     super.key,
@@ -14,6 +15,7 @@ class VoiceRecordingCard extends StatelessWidget {
     required this.formattedTime,
     required this.statusMessage,
     required this.onSaveAndIngest,
+    this.onCancel,
   });
 
   @override
@@ -42,55 +44,82 @@ class VoiceRecordingCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: AppColors.secondary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Recording Voice Memo',
-                    style: AppTypography.titleSm.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: AppColors.outlineVariant,
-                    width: 1,
-                  ),
-                ),
+              Expanded(
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.schedule,
-                      size: 14,
-                      color: AppColors.primary,
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: AppColors.secondary,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      formattedTime,
-                      style: AppTypography.labelSm.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Recording Voice Memo',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.titleSm.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: AppColors.outlineVariant,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          formattedTime,
+                          style: AppTypography.labelSm.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (onCancel != null) ...[
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: onCancel,
+                      borderRadius: BorderRadius.circular(16),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4.0),
+                        child: Icon(
+                          Icons.close,
+                          size: 18,
+                          color: AppColors.outline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

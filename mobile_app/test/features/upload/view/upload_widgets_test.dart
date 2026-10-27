@@ -11,28 +11,22 @@ void main() {
   group('Upload Component Widget Tests', () {
     testWidgets('UploadHeader renders title and back arrow', (tester) async {
       bool backTapped = false;
-      bool optionsTapped = false;
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             appBar: UploadHeader(
               onBackTap: () => backTapped = true,
-              onOptionsTap: () => optionsTapped = true,
             ),
           ),
         ),
       );
 
-      expect(find.text('Add New Knowledge'), findsOneWidget);
+      expect(find.text('Upload Documents'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back), findsOneWidget);
-      expect(find.byIcon(Icons.more_vert), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.arrow_back));
       expect(backTapped, isTrue);
-
-      await tester.tap(find.byIcon(Icons.more_vert));
-      expect(optionsTapped, isTrue);
     });
 
     testWidgets('UploadActionCards renders cards and triggers taps',

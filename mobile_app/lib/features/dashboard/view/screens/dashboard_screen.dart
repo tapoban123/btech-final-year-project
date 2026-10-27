@@ -38,6 +38,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context, state) {
         return Scaffold(
           backgroundColor: AppColors.surfaceContainerLowest,
+          appBar: DashboardTopBar(
+            onProfileTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Executive Profile: ED (Administrator)'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            onOptionsTap: () {
+              _showMoreOptionsModal(context);
+            },
+          ),
           body: IndexedStack(
             index: state.currentNavIndex,
             children: [
@@ -93,27 +106,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildHomeTab(BuildContext context, DashboardState state) {
-    return Scaffold(
+    return RefreshIndicator(
+      color: AppColors.secondary,
       backgroundColor: AppColors.surfaceContainerLowest,
-      appBar: DashboardTopBar(
-        onProfileTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Executive Profile: ED (Administrator)'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        },
-        onOptionsTap: () {
-          _showMoreOptionsModal(context);
-        },
-      ),
-      body: RefreshIndicator(
-            color: AppColors.secondary,
-            backgroundColor: AppColors.surfaceContainerLowest,
-            onRefresh: () async {
-              context.read<DashboardBloc>().add(const LoadDashboardData());
-            },
+      onRefresh: () async {
+        context.read<DashboardBloc>().add(const LoadDashboardData());
+      },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
@@ -192,7 +190,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
-          ),
     );
   }
 

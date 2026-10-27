@@ -70,10 +70,14 @@ void main() {
 
     // Verify UploadScreen is displayed
     expect(find.byType(UploadScreen), findsOneWidget);
-    expect(find.text('Add New Knowledge'), findsOneWidget);
+    expect(find.text('Upload Documents'), findsOneWidget);
     expect(find.text('Upload Files'), findsOneWidget);
     expect(find.text('Record Voice Note'), findsOneWidget);
     expect(find.text('Recent Uploads'), findsOneWidget);
+
+    // Tap on Record Voice Note to reveal the condition-based VoiceRecordingCard
+    await tester.tap(find.text('Record Voice Note'));
+    await tester.pumpAndSettle();
     expect(find.text('Recording Voice Memo'), findsOneWidget);
     expect(find.text('Save & Ingest'), findsOneWidget);
 
@@ -101,7 +105,7 @@ void main() {
 
     // Verify Active RAG Context Strip
     expect(find.text('3 Active Contexts'), findsOneWidget);
-    expect(find.text('Grounded'), findsOneWidget);
+    expect(find.byIcon(Icons.tune), findsOneWidget);
 
     // Verify Prompt Chips & Input
     expect(find.text('Summarize these docs'), findsOneWidget);

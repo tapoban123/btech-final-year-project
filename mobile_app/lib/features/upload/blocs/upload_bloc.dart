@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../repository/models/upload_item.dart';
 import '../repository/upload_repository.dart';
 import 'upload_event.dart';
 import 'upload_state.dart';
@@ -11,7 +12,9 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
         super(const UploadState()) {
     on<LoadUploadData>(_onLoadUploadData);
     on<TriggerFileUpload>(_onTriggerFileUpload);
+    on<TriggerMultipleFilesUpload>(_onTriggerMultipleFilesUpload);
     on<StartVoiceRecording>(_onStartVoiceRecording);
+    on<CancelVoiceRecording>(_onCancelVoiceRecording);
     on<StopAndSaveVoiceRecording>(_onStopAndSaveVoiceRecording);
     on<UpdateRecordingDuration>(_onUpdateRecordingDuration);
   }
@@ -40,9 +43,46 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
     Emitter<UploadState> emit,
   ) async {
     try {
-      final newItem = await _repository.uploadFile(event.filename, event.type);
+      final newItem = await _repository.uploadFile(
+        event.filename,
+        event.type,
+        filePath: event.filePath,
+        fileSize: event.fileSize,
+      );
       final updatedList = List.of(state.recentUploads)..insert(0, newItem);
-      emit(state.copyWith(recentUploads: updatedList));
+      emit(state.copyWith(
+        recentUploads: updatedList,
+        status: UploadScreenStatus.success,
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        status: UploadScreenStatus.failure,
+        errorMessage: e.toString(),
+      ));
+    }
+  }
+
+  Future<void> _onTriggerMultipleFilesUpload(
+    TriggerMultipleFilesUpload event,
+    Emitter<UploadState> emit,
+  ) async {
+    if (event.files.isEmpty) return;
+    try {
+      final newItems = <UploadItem>[];
+      for (final file in event.files) {
+        final newItem = await _repository.uploadFile(
+          file.filename,
+          file.type,
+          filePath: file.filePath,
+          fileSize: file.fileSize,
+        );
+        newItems.add(newItem);
+      }
+      final updatedList = List.of(state.recentUploads)..insertAll(0, newItems);
+      emit(state.copyWith(
+        recentUploads: updatedList,
+        status: UploadScreenStatus.success,
+      ));
     } catch (e) {
       emit(state.copyWith(
         status: UploadScreenStatus.failure,
@@ -59,6 +99,16 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
       isRecording: true,
       recordingDurationSeconds: 0,
       speechDetectionMessage: 'Listening: Multimodal vector ingestion live',
+    ));
+  }
+
+  void _onCancelVoiceRecording(
+    CancelVoiceRecording event,
+    Emitter<UploadState> emit,
+  ) {
+    emit(state.copyWith(
+      isRecording: false,
+      recordingDurationSeconds: 0,
     ));
   }
 

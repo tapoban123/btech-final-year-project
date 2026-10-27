@@ -4,7 +4,12 @@ import 'models/upload_item.dart';
 
 abstract class IUploadRepository {
   Future<List<UploadItem>> getRecentUploads();
-  Future<UploadItem> uploadFile(String filename, DocumentType type);
+  Future<UploadItem> uploadFile(
+    String filename,
+    DocumentType type, {
+    String? filePath,
+    int? fileSize,
+  });
   Future<UploadItem> saveVoiceMemo(int durationSeconds);
 }
 
@@ -21,9 +26,15 @@ class UploadRepository implements IUploadRepository {
   }
 
   @override
-  Future<UploadItem> uploadFile(String filename, DocumentType type) async {
+  Future<UploadItem> uploadFile(
+    String filename,
+    DocumentType type, {
+    String? filePath,
+    int? fileSize,
+  }) async {
     final raw = await _apiClient.uploadFileRaw(filename, type.name);
-    return _mapToUploadItem(raw);
+    final item = _mapToUploadItem(raw);
+    return item.copyWith(filePath: filePath, fileSize: fileSize);
   }
 
   @override

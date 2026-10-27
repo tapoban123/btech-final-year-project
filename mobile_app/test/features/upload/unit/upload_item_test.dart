@@ -29,6 +29,8 @@ void main() {
         'OCR',
         UploadProcessingStatus.processing,
         null,
+        null,
+        null,
       ]);
     });
 

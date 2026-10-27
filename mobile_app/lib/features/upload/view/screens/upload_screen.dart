@@ -1,18 +1,27 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../dashboard/repository/models/document_item.dart';
-import '../../../dashboard/view/widgets/dashboard_bottom_nav.dart';
 import '../../blocs/upload_bloc.dart';
 import '../../blocs/upload_event.dart';
 import '../../blocs/upload_state.dart';
+import '../../services/file_picker_service.dart';
 import '../widgets/recent_uploads_card.dart';
 import '../widgets/upload_action_cards.dart';
 import '../widgets/upload_header.dart';
 import '../widgets/voice_recording_card.dart';
 
+enum _PickerOption { documents, images, audio }
+
 class UploadScreen extends StatefulWidget {
-  const UploadScreen({super.key});
+  final IFilePickerService filePickerService;
+
+  const UploadScreen({
+    super.key,
+    this.filePickerService = const FilePickerService(),
+  });
 
   @override
   State<UploadScreen> createState() => _UploadScreenState();
@@ -36,14 +45,6 @@ class _UploadScreenState extends State<UploadScreen> {
               if (Navigator.canPop(context)) {
                 Navigator.pop(context);
               }
-            },
-            onOptionsTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Upload settings & batch preferences'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
             },
           ),
           body: SafeArea(
@@ -70,29 +71,36 @@ class _UploadScreenState extends State<UploadScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // 2. Recent Uploads Section
-                      RecentUploadsCard(uploads: state.recentUploads),
-                      const SizedBox(height: 24),
-
-                      // 3. Voice Recording Overlay / Section
-                      VoiceRecordingCard(
-                        isRecording: state.isRecording,
-                        formattedTime: state.formattedDuration,
-                        statusMessage: state.speechDetectionMessage,
-                        onSaveAndIngest: () {
-                          context
-                              .read<UploadBloc>()
-                              .add(const StopAndSaveVoiceRecording());
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Voice Memo saved and queued for OCR/Audio indexing',
+                      // 2. Voice Recording Section (Visible conditionally when recording)
+                      if (state.isRecording) ...[
+                        VoiceRecordingCard(
+                          isRecording: state.isRecording,
+                          formattedTime: state.formattedDuration,
+                          statusMessage: state.speechDetectionMessage,
+                          onSaveAndIngest: () {
+                            context
+                                .read<UploadBloc>()
+                                .add(const StopAndSaveVoiceRecording());
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Voice Memo saved and queued for OCR/Audio indexing',
+                                ),
+                                duration: Duration(seconds: 2),
                               ),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                          onCancel: () {
+                            context
+                                .read<UploadBloc>()
+                                .add(const CancelVoiceRecording());
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // 3. Recent Uploads Section
+                      RecentUploadsCard(uploads: state.recentUploads),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -100,86 +108,260 @@ class _UploadScreenState extends State<UploadScreen> {
               ),
             ),
           ),
-          bottomNavigationBar: DashboardBottomNav(
-            currentIndex: 0,
-            onTabSelected: (index) {
-              if (index == 0) {
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-              } else if (index == 1) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Semantic Search'),
-                    duration: Duration(seconds: 1),
+          bottomNavigationBar: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.outlineVariant,
+                  width: 1.0,
+                ),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 12.0,
+                ),
+                child: Align(
+                  alignment: Alignment.center,
+                  heightFactor: 1.0,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: state.recentUploads.isNotEmpty
+                            ? () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${state.recentUploads.length} files confirmed for vector indexing',
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                                if (Navigator.canPop(context)) {
+                                  Navigator.pop(context);
+                                }
+                              }
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.onPrimary,
+                          disabledBackgroundColor: AppColors.surfaceContainerLow,
+                          disabledForegroundColor: AppColors.outline,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          state.recentUploads.isNotEmpty
+                              ? 'Confirm Upload (${state.recentUploads.length})'
+                              : 'Confirm Upload',
+                          style: AppTypography.labelLg.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                );
-              } else if (index == 2) {
-                Navigator.pop(context);
-              }
-            },
+                ),
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  void _handleFileUpload(BuildContext context) {
-    showModalBottomSheet(
+  Future<void> _handleFileUpload(BuildContext context) async {
+    final option = await showModalBottomSheet<_PickerOption>(
       context: context,
+      backgroundColor: AppColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                leading: const Icon(Icons.picture_as_pdf, color: AppColors.error),
-                title: const Text('Upload PDF Document'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.read<UploadBloc>().add(
-                        const TriggerFileUpload(
-                          filename: 'Annual_Financial_Report.pdf',
-                          type: DocumentType.pdf,
-                        ),
-                      );
-                },
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              ListTile(
-                leading: const Icon(Icons.image, color: AppColors.primary),
-                title: const Text('Upload Image / Diagram'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.read<UploadBloc>().add(
-                        const TriggerFileUpload(
-                          filename: 'System_Architecture_Whiteboard.png',
-                          type: DocumentType.image,
-                        ),
-                      );
-                },
+              _buildPickerOption(
+                icon: Icons.description_outlined,
+                iconColor: AppColors.primaryContainer,
+                title: 'Documents',
+                onTap: () => Navigator.of(ctx).pop(_PickerOption.documents),
               ),
-              ListTile(
-                leading:
-                    const Icon(Icons.audio_file, color: AppColors.secondary),
-                title: const Text('Upload Audio Recording'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.read<UploadBloc>().add(
-                        const TriggerFileUpload(
-                          filename: 'Interview_Recording.m4a',
-                          type: DocumentType.audio,
-                        ),
-                      );
-                },
+              const SizedBox(height: 12),
+              _buildPickerOption(
+                icon: Icons.image_outlined,
+                iconColor: AppColors.secondary,
+                title: 'Images',
+                onTap: () => Navigator.of(ctx).pop(_PickerOption.images),
+              ),
+              const SizedBox(height: 12),
+              _buildPickerOption(
+                icon: Icons.audio_file_outlined,
+                iconColor: AppColors.primary,
+                title: 'Audio',
+                onTap: () => Navigator.of(ctx).pop(_PickerOption.audio),
               ),
             ],
           ),
         ),
       ),
     );
+
+    if (!mounted || option == null) return;
+
+    // Wait for the modal dismissal transition to complete before presenting the native iOS picker
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (!mounted) return;
+
+    switch (option) {
+      case _PickerOption.documents:
+        await _pickAndUploadFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
+        );
+        break;
+      case _PickerOption.images:
+        await _pickAndUploadFiles(type: FileType.image);
+        break;
+      case _PickerOption.audio:
+        await _pickAndUploadFiles(type: FileType.audio);
+        break;
+    }
+  }
+
+  Widget _buildPickerOption({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppColors.outlineVariant.withValues(alpha: 0.6),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              title,
+              style: AppTypography.titleSm.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.outline,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadFiles({
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+  }) async {
+    final files = await widget.filePickerService.pickFiles(
+      type: type,
+      allowedExtensions: allowedExtensions,
+    );
+
+    if (files != null && files.isNotEmpty && mounted) {
+      final selectedFiles = files.map((file) {
+        final ext = file.extension ?? file.name.split('.').last;
+        final docType = _getDocumentTypeFromExtension(ext);
+        return SelectedFileInfo(
+          filename: file.name,
+          type: docType,
+          filePath: file.path,
+          fileSize: file.lengthSync(),
+        );
+      }).toList();
+
+      context.read<UploadBloc>().add(
+            TriggerMultipleFilesUpload(selectedFiles),
+          );
+
+      final count = files.length;
+      final message = count == 1
+          ? '${files.first.name} selected and queued for ingestion'
+          : '$count files selected and queued for ingestion';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  DocumentType _getDocumentTypeFromExtension(String ext) {
+    final clean = ext.toLowerCase().replaceAll('.', '');
+    switch (clean) {
+      case 'pdf':
+        return DocumentType.pdf;
+      case 'doc':
+      case 'docx':
+      case 'txt':
+        return DocumentType.docx;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+      case 'gif':
+        return DocumentType.image;
+      case 'mp3':
+      case 'm4a':
+      case 'wav':
+      case 'aac':
+        return DocumentType.audio;
+      default:
+        return DocumentType.pdf;
+    }
   }
 }

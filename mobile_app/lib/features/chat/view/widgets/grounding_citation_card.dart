@@ -19,64 +19,44 @@ class GroundingCitationCard extends StatelessWidget {
     if (citations.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.all(10.0),
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: AppColors.outlineVariant,
+          color: AppColors.outlineVariant.withValues(alpha: 0.5),
           width: 1.0,
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2.0),
-            child: Icon(
-              Icons.description,
-              size: 16,
-              color: AppColors.primaryContainer,
+          const Icon(
+            Icons.menu_book_outlined,
+            size: 15,
+            color: AppColors.outline,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Sources:',
+            style: AppTypography.labelSm.copyWith(
+              color: AppColors.outline,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(width: 8),
-
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+            child: Wrap(
+              spacing: 6.0,
+              runSpacing: 4.0,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(
-                  'GROUNDING EVIDENCE',
-                  style: AppTypography.labelSm.copyWith(
-                    color: AppColors.outline,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-
-                Wrap(
-                  spacing: 6.0,
-                  runSpacing: 4.0,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    for (int i = 0; i < citations.length; i++) ...[
-                      _buildCitationTag(citations[i]),
-                      if (i < citations.length - 1)
-                        Text(
-                          '&',
-                          style: AppTypography.labelSm.copyWith(
-                            color: AppColors.outline,
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
+                for (final citation in citations)
+                  _buildCitationTag(citation),
               ],
             ),
           ),
-
+          const SizedBox(width: 4),
           InkWell(
             onTap: onInspectTap,
             borderRadius: BorderRadius.circular(4),
@@ -84,7 +64,7 @@ class GroundingCitationCard extends StatelessWidget {
               padding: EdgeInsets.all(2.0),
               child: Icon(
                 Icons.open_in_new,
-                size: 16,
+                size: 15,
                 color: AppColors.outline,
               ),
             ),

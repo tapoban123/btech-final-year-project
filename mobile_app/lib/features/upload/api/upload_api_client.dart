@@ -9,29 +9,8 @@ class UploadApiClient {
       await Future.delayed(networkDelay);
     }
 
-    return [
-      {
-        'id': 'up_1',
-        'title': 'Vendor_Contract_2025_Final.pdf',
-        'type': 'pdf',
-        'stageDescription': 'Analyzing semantic vectors',
-        'status': 'processing',
-      },
-      {
-        'id': 'up_2',
-        'title': 'Product_Roadmap_Q4.png',
-        'type': 'image',
-        'stageDescription': 'OCR text extraction',
-        'status': 'processing',
-      },
-      {
-        'id': 'up_3',
-        'title': 'Partner_Sync_Audio_Call.m4a',
-        'type': 'audio',
-        'stageDescription': 'Transcribing audio',
-        'status': 'processing',
-      },
-    ];
+    // Production environment: Starts empty until user uploads files
+    return [];
   }
 
   Future<Map<String, dynamic>> uploadFileRaw(

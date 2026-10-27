@@ -88,6 +88,27 @@ test/
 ### 4.1. TDD Rules
 - **Red $\rightarrow$ Green $\rightarrow$ Refactor:** Write unit and widget tests concurrent with or prior to implementation.
 - **Deterministic Mocks:** All tests must be 100% deterministic using `mocktail` — no live network calls or unconstrained timers.
+- **Cross-Platform Verification:** Always ensure that tests validate behaviors, fallbacks, and edge cases equally for both Android and iOS environments.
 - **Quality Gate:** Contributions are complete only when:
   1. `flutter test` passes with **100% success rate**.
   2. `flutter analyze` reports **0 issues (zero errors, zero warnings)**.
+
+---
+
+## 5. Cross-Platform Parity: Android & iOS Equal Support
+
+> [!IMPORTANT]
+> **Strict Requirement:** All features, UI capabilities, workflows, native integrations, and permissions must be **equally supported on both Android and iOS**. Feature divergence or platform-exclusive omissions are strictly prohibited. Always ensure equal support across both platforms using comprehensive tests.
+
+### 5.1. Platform Parity Standards
+1. **Native Permissions & Configuration:**
+   - When integrating native capabilities (file picking, photo library, microphone/audio recording, storage, background jobs):
+     - **Android:** Configure `android/app/src/main/AndroidManifest.xml` (permissions, providers, queries, intent filters) and build settings in `build.gradle`.
+     - **iOS:** Configure `ios/Runner/Info.plist` (explicit usage descriptions such as `NSPhotoLibraryUsageDescription`, `NSMicrophoneUsageDescription`, `UIFileSharingEnabled`, `LSSupportsOpeningDocumentsInPlace`) and `ios/Podfile` minimum deployment targets.
+2. **Lifecycle & Modal Transition Safety:**
+   - Never present native platform view controllers (file/image pickers, share sheets) during active Flutter modal dismissal transitions. Always await route dismissal and allow a frame delay before invoking platform channels to prevent iOS UIKit presentation drop-offs or Android window leaks.
+3. **Graceful Platform Fallbacks:**
+   - When platform-specific limitations occur (such as iOS Uniform Type Identifier [UTI] restrictions on custom file extensions), always implement automatic fallback strategies (e.g., falling back to `FileType.any`) so user workflows never fail silently on either platform.
+4. **Equal Verification via Automated Tests:**
+   - Both Android and iOS logic paths, platform exception handling, and UI interactions must be equally covered by automated test suites (`test/features/<feature>/`).
+   - Mock platform channels and test edge cases on both platform constraints. Tests must never rely on platform-exclusive behaviors.

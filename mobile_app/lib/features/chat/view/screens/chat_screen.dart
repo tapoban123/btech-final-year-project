@@ -18,11 +18,13 @@ import '../../../../core/utils/app_formatters.dart';
 class ChatScreen extends StatefulWidget {
   final bool showBottomNav;
   final VoidCallback? onBackTap;
+  final bool showHeader;
 
   const ChatScreen({
     super.key,
     this.showBottomNav = true,
     this.onBackTap,
+    this.showHeader = false,
   });
 
   @override
@@ -70,16 +72,18 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context, state) {
         return Scaffold(
           backgroundColor: AppColors.surfaceContainerLowest,
-          appBar: ChatHeader(
-            onBackTap: () {
-              if (widget.onBackTap != null) {
-                widget.onBackTap!();
-              } else if (Navigator.canPop(context)) {
-                Navigator.pop(context);
-              }
-            },
-            onManageTap: () => _showManageContextSheet(context, state),
-          ),
+          appBar: widget.showHeader
+              ? ChatHeader(
+                  onBackTap: () {
+                    if (widget.onBackTap != null) {
+                      widget.onBackTap!();
+                    } else if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  onManageTap: () => _showManageContextSheet(context, state),
+                )
+              : null,
           body: SafeArea(
             child: Column(
               children: [

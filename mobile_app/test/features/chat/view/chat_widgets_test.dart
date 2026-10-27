@@ -39,7 +39,7 @@ void main() {
       expect(manageTapped, isTrue);
     });
 
-    testWidgets('RAGContextStrip renders active context count and grounded pill',
+    testWidgets('RAGContextStrip renders active context count and manage action',
         (tester) async {
       const contexts = [
         ActiveRAGContext(id: '1', title: 'File1.pdf', type: DocumentType.pdf),
@@ -58,11 +58,11 @@ void main() {
       );
 
       expect(find.text('2 Active Contexts'), findsOneWidget);
-      expect(find.text('Grounded'), findsOneWidget);
-      expect(find.byIcon(Icons.expand_more), findsOneWidget);
+      expect(find.text('Manage'), findsOneWidget);
+      expect(find.byIcon(Icons.tune), findsOneWidget);
     });
 
-    testWidgets('UserMessageBubble renders message content and delivery receipt',
+    testWidgets('UserMessageBubble renders message content and timestamp',
         (tester) async {
       const msg = ChatMessage(
         id: '1',
@@ -81,12 +81,11 @@ void main() {
 
       expect(find.text('What is the projected ROI?'), findsOneWidget);
       expect(find.text('11:05 AM'), findsOneWidget);
-      expect(find.byIcon(Icons.done_all), findsOneWidget);
     });
 
-    testWidgets('AssistantMessageBubble renders points and feedback options',
+    testWidgets('AssistantMessageBubble renders points and action options',
         (tester) async {
-      bool feedbackTapped = false;
+      bool shareTapped = false;
 
       const assistantMsg = ChatMessage(
         id: 'a1',
@@ -108,7 +107,7 @@ void main() {
           home: Scaffold(
             body: AssistantMessageBubble(
               message: assistantMsg,
-              onAccurateTap: () => feedbackTapped = true,
+              onShareTap: () => shareTapped = true,
             ),
           ),
         ),
@@ -117,11 +116,10 @@ void main() {
       expect(find.text('OmniDoc AI'), findsOneWidget);
       expect(find.text('Analysis output:'), findsOneWidget);
       expect(find.text('Copy'), findsOneWidget);
-      expect(find.text('Accurate'), findsOneWidget);
-      expect(find.text('Export memo'), findsOneWidget);
+      expect(find.text('Share'), findsOneWidget);
 
-      await tester.tap(find.text('Accurate'));
-      expect(feedbackTapped, isTrue);
+      await tester.tap(find.text('Share'));
+      expect(shareTapped, isTrue);
     });
 
     testWidgets('GroundingCitationCard renders citation badge and title',
@@ -142,7 +140,7 @@ void main() {
         ),
       );
 
-      expect(find.text('GROUNDING EVIDENCE'), findsOneWidget);
+      expect(find.text('Sources:'), findsOneWidget);
       expect(find.text('Financial_Model.pdf'), findsOneWidget);
       expect(find.text('(p.8)'), findsOneWidget);
       expect(find.byIcon(Icons.open_in_new), findsOneWidget);
