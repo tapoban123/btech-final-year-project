@@ -5,121 +5,111 @@ import '../../../../core/theme/app_typography.dart';
 class VoiceRecordingCard extends StatelessWidget {
   final bool isRecording;
   final String formattedTime;
-  final String statusMessage;
-  final VoidCallback onSaveAndIngest;
+  final double amplitude;
+  final VoidCallback onRecord;
+  final VoidCallback onDone;
+  final VoidCallback onDelete;
   final VoidCallback? onCancel;
 
   const VoiceRecordingCard({
     super.key,
     required this.isRecording,
     required this.formattedTime,
-    required this.statusMessage,
-    required this.onSaveAndIngest,
+    this.amplitude = 0.0,
+    required this.onRecord,
+    required this.onDone,
+    required this.onDelete,
     this.onCancel,
   });
+
+  static const List<double> _barWeights = [
+    0.35, 0.5, 0.7, 0.85, 0.65, 0.95, 1.0, 0.8,
+    0.9, 0.75, 1.0, 0.85, 0.9, 0.7, 0.85, 0.6,
+    0.75, 0.9, 0.65, 0.8, 0.55, 0.7, 0.45, 0.3,
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppColors.outlineVariant,
+          color: isRecording
+              ? AppColors.secondary.withValues(alpha: 0.5)
+              : AppColors.outlineVariant,
           width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: AppColors.primary.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: AppColors.secondary,
-                        shape: BoxShape.circle,
-                      ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isRecording ? AppColors.error : AppColors.outline,
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Recording Voice Memo',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.titleSm.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isRecording ? 'Recording Voice Note' : 'Voice Note',
+                    style: AppTypography.titleSm.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: AppColors.outlineVariant,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.schedule,
+                      size: 13,
+                      color: isRecording
+                          ? AppColors.secondary
+                          : AppColors.outline,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      formattedTime,
+                      style: AppTypography.labelSm.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: AppColors.outlineVariant,
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.schedule,
-                          size: 14,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          formattedTime,
-                          style: AppTypography.labelSm.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (onCancel != null) ...[
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: onCancel,
-                      borderRadius: BorderRadius.circular(16),
-                      child: const Padding(
-                        padding: EdgeInsets.all(4.0),
-                        child: Icon(
-                          Icons.close,
-                          size: 18,
-                          color: AppColors.outline,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
               ),
             ],
           ),
@@ -127,68 +117,101 @@ class VoiceRecordingCard extends StatelessWidget {
 
           // Central Waveform Display
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             decoration: BoxDecoration(
               color: AppColors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: AppColors.outlineVariant.withValues(alpha: 0.6),
+                color: AppColors.outlineVariant.withValues(alpha: 0.5),
                 width: 1,
               ),
             ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 _buildWaveformBars(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
-                  statusMessage,
+                  isRecording ? 'Listening...' : 'Tap mic to speak',
                   textAlign: TextAlign.center,
                   style: AppTypography.labelSm.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                    color: isRecording
+                        ? AppColors.primary
+                        : AppColors.onSurfaceVariant,
+                    fontWeight:
+                        isRecording ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-          // Save & Ingest Action Button
-          InkWell(
-            onTap: onSaveAndIngest,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.secondary,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.secondary.withValues(alpha: 0.25),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          // Action Deck: Delete, Record (disabled once recording), Check for Done
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // 1. Delete / Discard Button
+              IconButton(
+                key: const Key('voice_recorder_delete_button'),
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: AppColors.error,
+                  size: 22,
+                ),
+                tooltip: 'Delete recording',
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.surfaceContainerLow,
+                  minimumSize: const Size(48, 48),
+                  shape: const CircleBorder(),
+                ),
+                onPressed: onDelete,
               ),
-              alignment: Alignment.center,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.stop,
-                    color: AppColors.onSecondary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Save & Ingest',
-                    style: AppTypography.labelLg.copyWith(
-                      color: AppColors.onSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+
+              // 2. Record / Tap to Speak Button (Disabled once started recording)
+              IconButton(
+                key: const Key('voice_recorder_record_button'),
+                icon: Icon(
+                  isRecording ? Icons.mic : Icons.mic_none,
+                  color: isRecording
+                      ? AppColors.outline.withValues(alpha: 0.6)
+                      : AppColors.onPrimary,
+                  size: 26,
+                ),
+                tooltip: isRecording ? 'Recording active' : 'Tap to speak',
+                style: IconButton.styleFrom(
+                  backgroundColor: isRecording
+                      ? AppColors.surfaceContainerLow
+                      : AppColors.primary,
+                  minimumSize: const Size(56, 56),
+                  shape: const CircleBorder(),
+                  elevation: isRecording ? 0 : 2,
+                ),
+                onPressed: isRecording ? null : onRecord,
               ),
-            ),
+
+              // 3. Check for Done Button
+              IconButton(
+                key: const Key('voice_recorder_done_button'),
+                icon: Icon(
+                  Icons.check,
+                  color: isRecording
+                      ? AppColors.onSecondary
+                      : AppColors.outline,
+                  size: 24,
+                ),
+                tooltip: 'Done',
+                style: IconButton.styleFrom(
+                  backgroundColor: isRecording
+                      ? AppColors.secondary
+                      : AppColors.surfaceContainerLow,
+                  minimumSize: const Size(48, 48),
+                  shape: const CircleBorder(),
+                  elevation: isRecording ? 2 : 0,
+                ),
+                onPressed: onDone,
+              ),
+            ],
           ),
         ],
       ),
@@ -196,42 +219,37 @@ class VoiceRecordingCard extends StatelessWidget {
   }
 
   Widget _buildWaveformBars() {
-    final heights = [
-      14.0,
-      26.0,
-      18.0,
-      32.0,
-      22.0,
-      30.0,
-      16.0,
-      34.0,
-      20.0,
-      28.0,
-      14.0,
-      24.0,
-      32.0,
-      18.0,
-      10.0
-    ];
-
     return SizedBox(
-      height: 40,
+      height: 42,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
-        children: heights.map((h) {
+        children: List.generate(_barWeights.length, (index) {
+          final weight = _barWeights[index];
+          final double barHeight;
+          if (isRecording) {
+            final effectiveAmp = amplitude <= 0 ? 0.2 : amplitude;
+            barHeight = (6.0 + 34.0 * (effectiveAmp * weight)).clamp(6.0, 40.0);
+          } else {
+            barHeight = 6.0;
+          }
+
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2.0),
-            child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2.5),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 90),
+              curve: Curves.easeOutQuad,
               width: 3.5,
-              height: h,
+              height: barHeight,
               decoration: BoxDecoration(
-                color: AppColors.secondary,
-                borderRadius: BorderRadius.circular(999),
+                color: isRecording
+                    ? AppColors.secondary
+                    : AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(4),
               ),
             ),
           );
-        }).toList(),
+        }),
       ),
     );
   }

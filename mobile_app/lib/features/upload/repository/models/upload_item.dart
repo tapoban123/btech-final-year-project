@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import '../../../dashboard/repository/models/document_item.dart';
 
 enum UploadProcessingStatus {
+  queued,
   processing,
   completed,
   failed,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/preview/file_preview_modal.dart';
 import '../../../dashboard/repository/models/document_item.dart';
 import '../../blocs/upload_bloc.dart';
 import '../../blocs/upload_event.dart';
@@ -36,7 +37,35 @@ class _UploadScreenState extends State<UploadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<UploadBloc, UploadState>(
+    return BlocConsumer<UploadBloc, UploadState>(
+      listenWhen: (prev, curr) =>
+          (prev.isUploading && !curr.isUploading) ||
+          (curr.status == UploadScreenStatus.failure &&
+              curr.errorMessage != null &&
+              prev.errorMessage != curr.errorMessage),
+      listener: (context, state) {
+        if (state.status == UploadScreenStatus.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${state.recentUploads.length} files uploaded successfully',
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
+        } else if (state.status == UploadScreenStatus.failure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.errorMessage ?? 'Upload failed'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      },
       builder: (context, state) {
         return Scaffold(
           backgroundColor: AppColors.surfaceContainerLowest,
@@ -66,31 +95,34 @@ class _UploadScreenState extends State<UploadScreen> {
                         onRecordVoiceTap: () {
                           context
                               .read<UploadBloc>()
-                              .add(const StartVoiceRecording());
+                              .add(const OpenVoiceRecorder());
                         },
                       ),
                       const SizedBox(height: 24),
 
-                      // 2. Voice Recording Section (Visible conditionally when recording)
-                      if (state.isRecording) ...[
+                      // 2. Voice Recording Section (Visible when recorder is open)
+                      if (state.isRecorderOpen) ...[
                         VoiceRecordingCard(
                           isRecording: state.isRecording,
                           formattedTime: state.formattedDuration,
-                          statusMessage: state.speechDetectionMessage,
-                          onSaveAndIngest: () {
+                          amplitude: state.currentAmplitude,
+                          onRecord: () {
+                            context
+                                .read<UploadBloc>()
+                                .add(const StartVoiceRecording());
+                          },
+                          onDone: () {
                             context
                                 .read<UploadBloc>()
                                 .add(const StopAndSaveVoiceRecording());
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text(
-                                  'Voice Memo saved and queued for OCR/Audio indexing',
-                                ),
+                                content: Text('Voice Memo saved'),
                                 duration: Duration(seconds: 2),
                               ),
                             );
                           },
-                          onCancel: () {
+                          onDelete: () {
                             context
                                 .read<UploadBloc>()
                                 .add(const CancelVoiceRecording());
@@ -100,7 +132,22 @@ class _UploadScreenState extends State<UploadScreen> {
                       ],
 
                       // 3. Recent Uploads Section
-                      RecentUploadsCard(uploads: state.recentUploads),
+                      RecentUploadsCard(
+                        uploads: state.recentUploads,
+                        onRemoveItem: (itemId) {
+                          context
+                              .read<UploadBloc>()
+                              .add(RemoveUploadItem(itemId));
+                        },
+                        onPreviewItem: (item) {
+                          FilePreviewModal.show(
+                            context,
+                            title: item.title,
+                            type: item.type,
+                            filePath: item.filePath,
+                          );
+                        },
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -134,39 +181,59 @@ class _UploadScreenState extends State<UploadScreen> {
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
-                        onPressed: state.recentUploads.isNotEmpty
-                            ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${state.recentUploads.length} files confirmed for vector indexing',
-                                    ),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                                if (Navigator.canPop(context)) {
-                                  Navigator.pop(context);
-                                }
-                              }
-                            : null,
+                        onPressed:
+                            state.recentUploads.isNotEmpty && !state.isUploading
+                                ? () {
+                                    context
+                                        .read<UploadBloc>()
+                                        .add(const ConfirmAndUploadAll());
+                                  }
+                                : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: AppColors.onPrimary,
-                          disabledBackgroundColor: AppColors.surfaceContainerLow,
+                          disabledBackgroundColor:
+                              AppColors.surfaceContainerLow,
                           disabledForegroundColor: AppColors.outline,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                           elevation: 0,
                         ),
-                        child: Text(
-                          state.recentUploads.isNotEmpty
-                              ? 'Confirm Upload (${state.recentUploads.length})'
-                              : 'Confirm Upload',
-                          style: AppTypography.labelLg.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        child: state.isUploading
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.onPrimary,
+                                    ),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'Uploading...',
+                                    style: TextStyle(
+                                      color: AppColors.onPrimary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                state.recentUploads.isNotEmpty
+                                    ? 'Confirm Upload (${state.recentUploads.length})'
+                                    : 'Confirm Upload',
+                                style: AppTypography.labelLg.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: state.recentUploads.isNotEmpty
+                                      ? AppColors.onPrimary
+                                      : AppColors.outline,
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -305,38 +372,50 @@ class _UploadScreenState extends State<UploadScreen> {
     FileType type = FileType.any,
     List<String>? allowedExtensions,
   }) async {
-    final files = await widget.filePickerService.pickFiles(
-      type: type,
-      allowedExtensions: allowedExtensions,
-    );
-
-    if (files != null && files.isNotEmpty && mounted) {
-      final selectedFiles = files.map((file) {
-        final ext = file.extension ?? file.name.split('.').last;
-        final docType = _getDocumentTypeFromExtension(ext);
-        return SelectedFileInfo(
-          filename: file.name,
-          type: docType,
-          filePath: file.path,
-          fileSize: file.lengthSync(),
-        );
-      }).toList();
-
-      context.read<UploadBloc>().add(
-            TriggerMultipleFilesUpload(selectedFiles),
-          );
-
-      final count = files.length;
-      final message = count == 1
-          ? '${files.first.name} selected and queued for ingestion'
-          : '$count files selected and queued for ingestion';
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-        ),
+    try {
+      final files = await widget.filePickerService.pickFiles(
+        type: type,
+        allowedExtensions: allowedExtensions,
       );
+
+      if (files != null && files.isNotEmpty && mounted) {
+        final selectedFiles = files.map((file) {
+          final ext = file.extension ?? file.name.split('.').last;
+          final docType = _getDocumentTypeFromExtension(ext);
+          return SelectedFileInfo(
+            filename: file.name,
+            type: docType,
+            filePath: file.path,
+            fileSize: file.lengthSync(),
+          );
+        }).toList();
+
+        context.read<UploadBloc>().add(
+              TriggerMultipleFilesUpload(selectedFiles),
+            );
+
+        final count = files.length;
+        final message = count == 1
+            ? '${files.first.name} selected'
+            : '$count files selected';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Storage or media permission is required to select files.'),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 

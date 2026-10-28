@@ -25,7 +25,7 @@ class UploadApiClient {
       'id': 'up_${DateTime.now().millisecondsSinceEpoch}',
       'title': filename,
       'type': fileType,
-      'stageDescription': 'Initiating semantic vector indexing',
+      'stageDescription': '',
       'status': 'processing',
     };
   }
@@ -39,7 +39,7 @@ class UploadApiClient {
       'id': 'memo_${DateTime.now().millisecondsSinceEpoch}',
       'title': 'Voice_Memo_${DateTime.now().millisecondsSinceEpoch}.m4a',
       'type': 'audio',
-      'stageDescription': 'Transcribing and indexing audio vectors',
+      'stageDescription': '',
       'status': 'processing',
     };
   }

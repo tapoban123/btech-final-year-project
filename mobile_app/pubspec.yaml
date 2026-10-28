@@ -39,6 +39,10 @@ dependencies:
   intl: ^0.20.3
   google_fonts: ^8.2.1
   file_picker: ^13.3.0
+  record: ^6.2.1
+  audioplayers: ^6.7.1
+  pdfx: ^2.11.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:

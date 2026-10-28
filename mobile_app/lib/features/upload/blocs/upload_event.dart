@@ -55,8 +55,21 @@ class TriggerMultipleFilesUpload extends UploadEvent {
   List<Object?> get props => [files];
 }
 
+class OpenVoiceRecorder extends UploadEvent {
+  const OpenVoiceRecorder();
+}
+
 class StartVoiceRecording extends UploadEvent {
   const StartVoiceRecording();
+}
+
+class UpdateVoiceAmplitude extends UploadEvent {
+  final double amplitude;
+
+  const UpdateVoiceAmplitude(this.amplitude);
+
+  @override
+  List<Object?> get props => [amplitude];
 }
 
 class CancelVoiceRecording extends UploadEvent {
@@ -74,4 +87,17 @@ class UpdateRecordingDuration extends UploadEvent {
 
   @override
   List<Object?> get props => [seconds];
+}
+
+class RemoveUploadItem extends UploadEvent {
+  final String itemId;
+
+  const RemoveUploadItem(this.itemId);
+
+  @override
+  List<Object?> get props => [itemId];
+}
+
+class ConfirmAndUploadAll extends UploadEvent {
+  const ConfirmAndUploadAll();
 }

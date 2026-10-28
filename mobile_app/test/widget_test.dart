@@ -78,8 +78,12 @@ void main() {
     // Tap on Record Voice Note to reveal the condition-based VoiceRecordingCard
     await tester.tap(find.text('Record Voice Note'));
     await tester.pumpAndSettle();
-    expect(find.text('Recording Voice Memo'), findsOneWidget);
-    expect(find.text('Save & Ingest'), findsOneWidget);
+    expect(find.text('Voice Note'), findsOneWidget);
+    expect(find.text('Tap mic to speak'), findsOneWidget);
+    expect(find.byKey(const Key('voice_recorder_delete_button')), findsOneWidget);
+    expect(find.byKey(const Key('voice_recorder_record_button')), findsOneWidget);
+    expect(find.byKey(const Key('voice_recorder_done_button')), findsOneWidget);
+    expect(find.text('Save & Ingest'), findsNothing);
 
     // Tap back to return to Dashboard
     await tester.tap(find.byIcon(Icons.arrow_back));
