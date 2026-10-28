@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../repository/models/chat_message.dart';
-import 'grounding_citation_card.dart';
 
 class AssistantMessageBubble extends StatelessWidget {
   final ChatMessage message;
@@ -89,22 +88,6 @@ class AssistantMessageBubble extends StatelessWidget {
               ],
             ),
           ),
-
-          // Citations Box
-          if (message.citations.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            GroundingCitationCard(
-              citations: message.citations,
-              onInspectTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Opening Grounding Evidence inspector...'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-            ),
-          ],
 
           // Quick Action Row: Copy & Share
           const SizedBox(height: 8),

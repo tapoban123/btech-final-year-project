@@ -37,23 +37,47 @@ void main() {
   });
 
   testWidgets(
-      'Tapping top search bar navigates to Semantic Search view via IndexedStack',
+      'Tapping Select toggles selection mode and overlays bottom nav with batch actions',
       (WidgetTester tester) async {
     await tester.pumpWidget(const OmniDocApp());
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
-    final searchBarPlaceholder =
-        find.text('Search across all documents, images, and voice...');
-    expect(searchBarPlaceholder, findsOneWidget);
-    await tester.tap(searchBarPlaceholder);
+    final selectButton = find.text('Select');
+    expect(selectButton, findsOneWidget);
+    await tester.tap(selectButton);
     await tester.pumpAndSettle();
 
-    // Verify switched to Semantic Search screen and search scope is removed
-    expect(find.text('Semantic Search'), findsOneWidget);
-    expect(find.text('Search Scope:'), findsNothing);
-    expect(find.text('All Files'), findsNothing);
+    // In selection mode, 'Select' turns to 'Cancel'
+    expect(find.text('Cancel'), findsOneWidget);
+
+    // ZERO selection is default
+    expect(find.text('Select items'), findsOneWidget);
+    expect(find.text('1 selected'), findsNothing);
+
+    // Tapping first document selects it
+    await tester.tap(find.text('Q3_Financial_Analysis_Report.pdf'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 selected'), findsOneWidget);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('Share'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+
+    // Tapping a second document selects it
+    await tester.tap(find.text('Executive_Strategy_Whiteboard.png'));
+    await tester.pumpAndSettle();
+    expect(find.text('2 selected'), findsOneWidget);
+
+    // Tapping Cancel exits selection mode and deselects all
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select'), findsOneWidget);
+    expect(find.text('selected'), findsNothing);
   });
+
+
+
 
   testWidgets(
       'Tapping floating upload button navigates to Upload & Voice Ingestion screen',

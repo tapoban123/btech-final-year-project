@@ -100,56 +100,93 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
 
-                // 2. Chat Feed Area
+                // 2. Chat Feed Area: static widget if empty, scrollable ListView if messages exist
                 Expanded(
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 480),
-                      child: ListView(
-                        controller: _scrollController,
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 12.0,
-                        ),
-                        children: [
-                          // Timestamp divider
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0),
-                              child: Text(
-                                AppFormatters.formatHeaderTimestamp(
-                                  dateTime: DateTime(2026, 1, 1, 10, 24),
+                      child: state.messages.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24.0,
+                                  vertical: 32.0,
                                 ),
-                                style: AppTypography.labelSm.copyWith(
-                                  color: AppColors.outline,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.8,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 40,
+                                      color: AppColors.outline,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Start a conversation',
+                                      style: AppTypography.titleSm.copyWith(
+                                        color: AppColors.onSurfaceVariant,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Ask questions about your uploaded documents',
+                                      style: AppTypography.bodySm.copyWith(
+                                        color: AppColors.outline,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
+                            )
+                          : ListView(
+                              controller: _scrollController,
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                                vertical: 12.0,
+                              ),
+                              children: [
+                                // Timestamp divider
+                                Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 8.0,
+                                    ),
+                                    child: Text(
+                                      AppFormatters.formatHeaderTimestamp(
+                                        dateTime: DateTime(2026, 1, 1, 10, 24),
+                                      ),
+                                      style: AppTypography.labelSm.copyWith(
+                                        color: AppColors.outline,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
 
-                          // Message Bubbles
-                          for (final message in state.messages) ...[
-                            if (message.sender == MessageSender.user)
-                              UserMessageBubble(message: message)
-                            else
-                              AssistantMessageBubble(
-                                message: message,
-                                onAccurateTap: () {
-                                  context.read<ChatBloc>().add(
-                                        SubmitMessageFeedback(
-                                          messageId: message.id,
-                                          isAccurate: true,
-                                        ),
-                                      );
-                                },
-                              ),
-                          ],
-                        ],
-                      ),
+                                // Message Bubbles
+                                for (final message in state.messages) ...[
+                                  if (message.sender == MessageSender.user)
+                                    UserMessageBubble(message: message)
+                                  else
+                                    AssistantMessageBubble(
+                                      message: message,
+                                      onAccurateTap: () {
+                                        context.read<ChatBloc>().add(
+                                              SubmitMessageFeedback(
+                                                messageId: message.id,
+                                                isAccurate: true,
+                                              ),
+                                            );
+                                      },
+                                    ),
+                                ],
+                              ],
+                            ),
                     ),
                   ),
                 ),

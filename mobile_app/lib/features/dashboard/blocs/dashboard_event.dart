@@ -43,6 +43,19 @@ class ClearSelectedDocuments extends DashboardEvent {
   const ClearSelectedDocuments();
 }
 
+class ToggleSelectionMode extends DashboardEvent {
+  final bool? isEnabled;
+
+  const ToggleSelectionMode([this.isEnabled]);
+
+  @override
+  List<Object?> get props => [isEnabled];
+}
+
+class DeleteSelectedDocuments extends DashboardEvent {
+  const DeleteSelectedDocuments();
+}
+
 class ChangeNavigationTab extends DashboardEvent {
   final int tabIndex;
 
@@ -51,3 +64,4 @@ class ChangeNavigationTab extends DashboardEvent {
   @override
   List<Object?> get props => [tabIndex];
 }
+

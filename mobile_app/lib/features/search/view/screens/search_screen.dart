@@ -28,85 +28,89 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+    return Scaffold(
+      backgroundColor: AppColors.surfaceContainerLowest,
+      body: SafeArea(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 1. In-page Header: Semantic Search title & filter action
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryContainer,
-                            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. In-page Header: Semantic Search title & filter action (never scrolls)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryContainer,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.saved_search,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                           ),
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.saved_search,
-                            size: 18,
-                            color: Colors.white,
+                          const SizedBox(width: 8),
+                          Text(
+                            'Semantic Search',
+                            style: AppTypography.titleMd.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Semantic Search',
-                          style: AppTypography.titleMd.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.tune,
-                        color: AppColors.onSurfaceVariant,
-                        size: 20,
+                        ],
                       ),
-                      tooltip: 'Search filters',
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Search filters & threshold settings'),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.tune,
+                          color: AppColors.onSurfaceVariant,
+                          size: 20,
+                        ),
+                        tooltip: 'Search filters',
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('Search filters & threshold settings'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
 
-                // 2. Search Query Input Field
-                _buildSearchInputField(),
-                const SizedBox(height: 16),
+                  // 2. Search Query Input Field (never scrolls)
+                  _buildSearchInputField(),
+                  const SizedBox(height: 16),
 
-                // 3. Results Header
-                _buildResultsHeader(),
-                const SizedBox(height: 12),
+                  // 3. Results Header (never scrolls)
+                  _buildResultsHeader(),
+                  const SizedBox(height: 12),
 
-                // 4. Semantic Results List
-                _buildResultCards(context),
-                const SizedBox(height: 40),
-              ],
+                  // 4. Semantic Results List (only this scrolls using ListView.builder)
+                  Expanded(
+                    child: _buildResultCards(context),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
 
   Widget _buildSearchInputField() {
     return Container(
@@ -184,55 +188,91 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildResultCards(BuildContext context) {
-    return Column(
-      children: [
-        // Card 1: PDF Document
-        _buildResultCard(
-          icon: Icons.picture_as_pdf,
-          iconBg: AppColors.surfaceContainerLow,
-          iconColor: AppColors.error,
-          title: 'Q3_Financial_Analysis_Report.pdf',
-          similarityMatch: '${AppFormatters.formatPercent(0.94)} match',
-          snippet:
-              '“...operating margins contracted by 2.4% primarily due to expedited freight tariffs and unexpected component re-routing across Q3 logistics...”',
-          metaLabel:
-              'Page ${AppFormatters.formatNumber(14)} • ${AppFormatters.formatDate(DateTime(2026, 10, 12))}',
-          metaIcon: Icons.calendar_today_outlined,
-          onViewInChat: () => widget.onNavigateToTab?.call(2),
+    if (_queryController.text.trim().isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.search_off,
+                color: AppColors.outline,
+                size: 40,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No search query entered',
+                style: AppTypography.titleSm.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Type a query above to search through documents',
+                style: AppTypography.bodySm,
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+      );
+    }
 
-        // Card 2: Audio Memo
-        _buildResultCard(
-          icon: Icons.graphic_eq,
-          iconBg: AppColors.surfaceContainerLow,
-          iconColor: AppColors.secondary,
-          title: 'Board_Meeting_Memo_Dictation.wav',
-          similarityMatch: '${AppFormatters.formatPercent(0.89)} match',
-          snippet:
-              '“...we decided to initiate dual-sourcing immediately to hedge against single-point supplier bottlenecks prior to November delivery targets...”',
-          metaLabel:
-              'Audio Segment • ${AppFormatters.formatDuration(222)}',
-          metaIcon: Icons.mic_none,
-          hasWaveform: true,
-          onViewInChat: () => widget.onNavigateToTab?.call(2),
-        ),
-        const SizedBox(height: 12),
-
-        // Card 3: Whiteboard Image
-        _buildResultCard(
-          icon: Icons.image_outlined,
-          iconBg: AppColors.surfaceContainerLow,
-          iconColor: AppColors.primary,
-          title: 'Executive_Strategy_Whiteboard.png',
-          similarityMatch: '${AppFormatters.formatPercent(0.82)} match',
-          snippet:
-              '[OCR Detected Text] Action Matrix: Tier 1 suppliers under review; escalate alternative quotes to Procurement by Friday...',
-          metaLabel: 'Bounding Box #${AppFormatters.formatNumber(4)}',
-          metaIcon: Icons.crop_free,
-          onViewInChat: () => widget.onNavigateToTab?.call(2),
-        ),
-      ],
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      padding: const EdgeInsets.only(bottom: 24),
+      itemCount: 3,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        switch (index) {
+          case 0:
+            return _buildResultCard(
+              icon: Icons.picture_as_pdf,
+              iconBg: AppColors.surfaceContainerLow,
+              iconColor: AppColors.error,
+              title: 'Q3_Financial_Analysis_Report.pdf',
+              similarityMatch: '${AppFormatters.formatPercent(0.94)} match',
+              snippet:
+                  '“...operating margins contracted by 2.4% primarily due to expedited freight tariffs and unexpected component re-routing across Q3 logistics...”',
+              metaLabel:
+                  'Page ${AppFormatters.formatNumber(14)} • ${AppFormatters.formatDate(DateTime(2026, 10, 12))}',
+              metaIcon: Icons.calendar_today_outlined,
+              onViewInChat: () => widget.onNavigateToTab?.call(2),
+            );
+          case 1:
+            return _buildResultCard(
+              icon: Icons.graphic_eq,
+              iconBg: AppColors.surfaceContainerLow,
+              iconColor: AppColors.secondary,
+              title: 'Board_Meeting_Memo_Dictation.wav',
+              similarityMatch: '${AppFormatters.formatPercent(0.89)} match',
+              snippet:
+                  '“...we decided to initiate dual-sourcing immediately to hedge against single-point supplier bottlenecks prior to November delivery targets...”',
+              metaLabel:
+                  'Audio Segment • ${AppFormatters.formatDuration(222)}',
+              metaIcon: Icons.mic_none,
+              hasWaveform: true,
+              onViewInChat: () => widget.onNavigateToTab?.call(2),
+            );
+          case 2:
+          default:
+            return _buildResultCard(
+              icon: Icons.image_outlined,
+              iconBg: AppColors.surfaceContainerLow,
+              iconColor: AppColors.primary,
+              title: 'Executive_Strategy_Whiteboard.png',
+              similarityMatch: '${AppFormatters.formatPercent(0.82)} match',
+              snippet:
+                  '[OCR Detected Text] Action Matrix: Tier 1 suppliers under review; escalate alternative quotes to Procurement by Friday...',
+              metaLabel: 'Bounding Box #${AppFormatters.formatNumber(4)}',
+              metaIcon: Icons.crop_free,
+              onViewInChat: () => widget.onNavigateToTab?.call(2),
+            );
+        }
+      },
     );
   }
 

@@ -75,7 +75,7 @@ void main() {
     });
 
     testWidgets(
-        'tapping clickable search bar navigates to Semantic Search screen',
+        'tapping Search tab in bottom navigation navigates to Semantic Search screen',
         (tester) async {
       when(() => mockRepository.getDocuments())
           .thenAnswer((_) async => sampleDocs);
@@ -87,15 +87,14 @@ void main() {
 
       expect(find.text('alpha_contract.pdf'), findsOneWidget);
 
-      // Tapping search bar placeholder navigates to Search screen
-      final searchBar =
-          find.text('Search across all documents, images, and voice...');
-      await tester.tap(searchBar);
+      // Tapping search bottom navigation item navigates to Search screen
+      await tester.tap(find.text('Search'));
       await tester.pumpAndSettle();
 
       expect(find.text('Semantic Search'), findsOneWidget);
       expect(find.text('Search Scope:'), findsNothing);
     });
+
 
     testWidgets('search with special characters does not crash',
         (tester) async {
@@ -181,30 +180,33 @@ void main() {
       await tester.pumpAndSettle();
 
       // Initially no batch bar
-      expect(find.text('1 file selected'), findsNothing);
+      expect(find.text('1 selected'), findsNothing);
+
+      // Enable selection mode via 'Select' button
+      await tester.tap(find.text('Select'));
+      await tester.pumpAndSettle();
 
       // Select first document
       await tester.tap(find.text('alpha_contract.pdf'));
       await tester.pumpAndSettle();
 
-      expect(find.text('1 file selected'), findsOneWidget);
-      expect(find.text('1 SELECTED'), findsOneWidget);
+      expect(find.text('1 selected'), findsOneWidget);
 
       // Select second document
       await tester.tap(find.text('beta_voice.wav'));
       await tester.pumpAndSettle();
 
-      expect(find.text('2 files selected'), findsOneWidget);
-      expect(find.text('2 SELECTED'), findsOneWidget);
+      expect(find.text('2 selected'), findsOneWidget);
 
       // Deselect both
       await tester.tap(find.text('alpha_contract.pdf'));
       await tester.tap(find.text('beta_voice.wav'));
       await tester.pumpAndSettle();
 
-      expect(find.text('files selected'), findsNothing);
-      expect(find.text('SELECTED'), findsNothing);
+      expect(find.text('1 selected'), findsNothing);
+      expect(find.text('2 selected'), findsNothing);
     });
+
 
     testWidgets('tapping sort filter icon opens sort bottom sheet',
         (tester) async {

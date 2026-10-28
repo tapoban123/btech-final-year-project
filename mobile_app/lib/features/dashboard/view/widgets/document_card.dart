@@ -6,19 +6,26 @@ import '../../repository/models/document_item.dart';
 class DocumentCard extends StatelessWidget {
   final DocumentItem item;
   final VoidCallback onToggleSelect;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final VoidCallback? onMoreTap;
+  final bool isSelectionMode;
 
   const DocumentCard({
     super.key,
     required this.item,
     required this.onToggleSelect,
+    this.isSelectionMode = false,
+    this.onTap,
+    this.onLongPress,
     this.onMoreTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onToggleSelect,
+      onTap: isSelectionMode ? onToggleSelect : (onTap ?? onToggleSelect),
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -29,17 +36,22 @@ class DocumentCard extends StatelessWidget {
               : AppColors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: AppColors.outlineVariant,
+            color: item.isSelected && isSelectionMode
+                ? AppColors.secondary
+                : AppColors.outlineVariant,
             width: 1.0,
           ),
         ),
         child: Row(
           children: [
-            // Selection indicator (Checked circle or unselected outline circle)
-            _buildSelectionCircle(),
-            const SizedBox(width: 12),
+            // Selection indicator (only when selection mode is enabled)
+            if (isSelectionMode) ...[
+              _buildSelectionCircle(),
+              const SizedBox(width: 12),
+            ],
 
             // Document Type Icon Badge (40x40)
+
             _buildIconBadge(),
             const SizedBox(width: 12),
 
@@ -187,34 +199,17 @@ class DocumentCard extends StatelessWidget {
             fontWeight: isAudio ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
-        const SizedBox(width: 5),
+        const SizedBox(width: 6),
         const Text('•', style: TextStyle(color: AppColors.outline, fontSize: 10)),
-        const SizedBox(width: 5),
+        const SizedBox(width: 6),
         Text(
           item.date,
           style: AppTypography.labelSm.copyWith(
             color: AppColors.outline,
           ),
         ),
-        const SizedBox(width: 5),
-        const Text('•', style: TextStyle(color: AppColors.outline, fontSize: 10)),
-        const SizedBox(width: 5),
-        Flexible(
-          child: Text(
-            item.statusTag,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.labelSm.copyWith(
-              color: item.isStatusHighlighted
-                  ? AppColors.secondary
-                  : AppColors.onSurfaceVariant,
-              fontWeight: item.isStatusHighlighted
-                  ? FontWeight.w600
-                  : FontWeight.w400,
-            ),
-          ),
-        ),
       ],
     );
   }
 }
+

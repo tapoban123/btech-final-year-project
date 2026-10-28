@@ -20,7 +20,7 @@ class DocumentApiClient {
         'date': AppFormatters.formatDate(DateTime(2026, 10, 14)),
         'statusTag': 'Parsed',
         'isStatusHighlighted': true,
-        'isSelected': true,
+        'isSelected': false,
       },
       {
         'id': 'doc_2',

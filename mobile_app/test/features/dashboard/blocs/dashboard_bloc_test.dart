@@ -29,7 +29,7 @@ void main() {
       fileSize: '2 MB',
       date: 'Oct 2',
       statusTag: 'OCR Ready',
-      isSelected: true,
+      isSelected: false,
     ),
   ];
 
@@ -127,7 +127,13 @@ void main() {
     blocTest<DashboardBloc, DashboardState>(
       'clears all selected documents on ClearSelectedDocuments event',
       build: () => DashboardBloc(repository: mockRepository),
-      seed: () => DashboardState(documents: sampleDocs),
+      seed: () => DashboardState(
+        documents: [
+          sampleDocs[0].copyWith(isSelected: true),
+          sampleDocs[1],
+        ],
+        isSelectionMode: true,
+      ),
       act: (bloc) => bloc.add(const ClearSelectedDocuments()),
       expect: () => [
         DashboardState(
@@ -135,17 +141,83 @@ void main() {
             sampleDocs[0].copyWith(isSelected: false),
             sampleDocs[1].copyWith(isSelected: false),
           ],
+          isSelectionMode: false,
+        ),
+      ],
+    );
+
+
+    blocTest<DashboardBloc, DashboardState>(
+      'toggles selection mode on ToggleSelectionMode event',
+      build: () => DashboardBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(const ToggleSelectionMode(true)),
+      expect: () => [
+        const DashboardState(isSelectionMode: true),
+      ],
+    );
+
+    blocTest<DashboardBloc, DashboardState>(
+      'clears all selections and ensures zero selection when toggling selection mode',
+      build: () => DashboardBloc(repository: mockRepository),
+      seed: () => DashboardState(
+        documents: [
+          sampleDocs[0].copyWith(isSelected: true),
+          sampleDocs[1].copyWith(isSelected: true),
+        ],
+        isSelectionMode: true,
+      ),
+      act: (bloc) => bloc.add(const ToggleSelectionMode(false)),
+      expect: () => [
+        DashboardState(
+          documents: [
+            sampleDocs[0].copyWith(isSelected: false),
+            sampleDocs[1].copyWith(isSelected: false),
+          ],
+          isSelectionMode: false,
         ),
       ],
     );
 
     blocTest<DashboardBloc, DashboardState>(
-      'updates currentNavIndex on ChangeNavigationTab event',
+      'deletes selected documents on DeleteSelectedDocuments event',
       build: () => DashboardBloc(repository: mockRepository),
+      seed: () => DashboardState(
+        documents: [
+          sampleDocs[0],
+          sampleDocs[1].copyWith(isSelected: true),
+        ],
+        isSelectionMode: true,
+      ),
+      act: (bloc) => bloc.add(const DeleteSelectedDocuments()),
+      expect: () => [
+        DashboardState(
+          documents: [sampleDocs[0]],
+          isSelectionMode: false,
+        ),
+      ],
+    );
+
+    blocTest<DashboardBloc, DashboardState>(
+      'updates currentNavIndex and clears selection mode on ChangeNavigationTab event',
+      build: () => DashboardBloc(repository: mockRepository),
+      seed: () => DashboardState(
+        documents: [
+          sampleDocs[0].copyWith(isSelected: true),
+        ],
+        isSelectionMode: true,
+      ),
       act: (bloc) => bloc.add(const ChangeNavigationTab(2)),
       expect: () => [
-        const DashboardState(currentNavIndex: 2),
+        DashboardState(
+          documents: [
+            sampleDocs[0].copyWith(isSelected: false),
+          ],
+          currentNavIndex: 2,
+          isSelectionMode: false,
+        ),
       ],
     );
   });
 }
+
+

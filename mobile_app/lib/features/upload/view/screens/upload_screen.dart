@@ -77,19 +77,15 @@ class _UploadScreenState extends State<UploadScreen> {
             },
           ),
           body: SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 16.0,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 4.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 1. Action Cards Section (Upload Files & Record Voice Note)
+                      // 1. Action Cards Section (Upload Files & Record Voice Note) - never scrolls
                       UploadActionCards(
                         onUploadFilesTap: () => _handleFileUpload(context),
                         onRecordVoiceTap: () {
@@ -98,9 +94,9 @@ class _UploadScreenState extends State<UploadScreen> {
                               .add(const OpenVoiceRecorder());
                         },
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
-                      // 2. Voice Recording Section (Visible when recorder is open)
+                      // 2. Voice Recording Section (Visible when recorder is open) - never scrolls
                       if (state.isRecorderOpen) ...[
                         VoiceRecordingCard(
                           isRecording: state.isRecording,
@@ -128,27 +124,29 @@ class _UploadScreenState extends State<UploadScreen> {
                                 .add(const CancelVoiceRecording());
                           },
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 12),
                       ],
 
-                      // 3. Recent Uploads Section
-                      RecentUploadsCard(
-                        uploads: state.recentUploads,
-                        onRemoveItem: (itemId) {
-                          context
-                              .read<UploadBloc>()
-                              .add(RemoveUploadItem(itemId));
-                        },
-                        onPreviewItem: (item) {
-                          FilePreviewModal.show(
-                            context,
-                            title: item.title,
-                            type: item.type,
-                            filePath: item.filePath,
-                          );
-                        },
+                      // 3. Recent Uploads Section (only the files scroll inside ListView.builder)
+                      Expanded(
+                        child: RecentUploadsCard(
+                          isExpanded: true,
+                          uploads: state.recentUploads,
+                          onRemoveItem: (itemId) {
+                            context
+                                .read<UploadBloc>()
+                                .add(RemoveUploadItem(itemId));
+                          },
+                          onPreviewItem: (item) {
+                            FilePreviewModal.show(
+                              context,
+                              title: item.title,
+                              type: item.type,
+                              filePath: item.filePath,
+                            );
+                          },
+                        ),
                       ),
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),

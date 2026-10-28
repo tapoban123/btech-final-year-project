@@ -10,6 +10,7 @@ class DashboardState extends Equatable {
   final DocumentFilterCategory selectedFilter;
   final String searchQuery;
   final int currentNavIndex;
+  final bool isSelectionMode;
   final String? errorMessage;
 
   const DashboardState({
@@ -23,6 +24,7 @@ class DashboardState extends Equatable {
     this.selectedFilter = DocumentFilterCategory.all,
     this.searchQuery = '',
     this.currentNavIndex = 0,
+    this.isSelectionMode = false,
     this.errorMessage,
   });
 
@@ -65,6 +67,7 @@ class DashboardState extends Equatable {
     DocumentFilterCategory? selectedFilter,
     String? searchQuery,
     int? currentNavIndex,
+    bool? isSelectionMode,
     String? errorMessage,
   }) {
     return DashboardState(
@@ -74,6 +77,7 @@ class DashboardState extends Equatable {
       selectedFilter: selectedFilter ?? this.selectedFilter,
       searchQuery: searchQuery ?? this.searchQuery,
       currentNavIndex: currentNavIndex ?? this.currentNavIndex,
+      isSelectionMode: isSelectionMode ?? this.isSelectionMode,
       errorMessage: errorMessage,
     );
   }
@@ -86,6 +90,8 @@ class DashboardState extends Equatable {
         selectedFilter,
         searchQuery,
         currentNavIndex,
+        isSelectionMode,
         errorMessage,
       ];
+
 }

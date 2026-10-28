@@ -8,20 +8,87 @@ class RecentUploadsCard extends StatelessWidget {
   final List<UploadItem> uploads;
   final ValueChanged<String>? onRemoveItem;
   final ValueChanged<UploadItem>? onPreviewItem;
+  final bool isExpanded;
 
   const RecentUploadsCard({
     super.key,
     required this.uploads,
     this.onRemoveItem,
     this.onPreviewItem,
+    this.isExpanded = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final listWidget = Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.outlineVariant,
+          width: 1.0,
+        ),
+      ),
+      child: uploads.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16.0,
+                  horizontal: 16.0,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 28,
+                      color: AppColors.outline.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'No uploads yet',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.outline,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Upload docs, images, or audio to stage them here',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.labelSm.copyWith(
+                        color: AppColors.outline.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : ListView.separated(
+              shrinkWrap: !isExpanded,
+              physics: isExpanded
+                  ? const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    )
+                  : const NeverScrollableScrollPhysics(),
+              itemCount: uploads.length,
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                color: AppColors.outlineVariant,
+              ),
+              itemBuilder: (context, index) {
+                final item = uploads[index];
+                return _buildUploadRow(item);
+              },
+            ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
+        // Header (never scrolls)
         Row(
           children: [
             Text(
@@ -56,64 +123,11 @@ class RecentUploadsCard extends StatelessWidget {
         ),
         const SizedBox(height: 10),
 
-        // List Container or Empty State
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: AppColors.outlineVariant,
-              width: 1.0,
-            ),
-          ),
-          child: uploads.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 32.0,
-                    horizontal: 16.0,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.cloud_upload_outlined,
-                        size: 38,
-                        color: AppColors.outline.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No uploads yet',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.outline,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Upload docs, images, or audio to stage them here',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.labelSm.copyWith(
-                          color: AppColors.outline.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: uploads.length,
-                  separatorBuilder: (context, index) => const Divider(
-                    height: 1,
-                    color: AppColors.outlineVariant,
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = uploads[index];
-                    return _buildUploadRow(item);
-                  },
-                ),
-        ),
+        // List Container or Empty State (only this scrolls if isExpanded is true)
+        if (isExpanded)
+          Expanded(child: listWidget)
+        else
+          listWidget,
       ],
     );
   }
