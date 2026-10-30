@@ -23,6 +23,13 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  bool _isSearchSelectionMode = false;
+  int _searchSelectedCount = 0;
+  VoidCallback? _onSearchChat;
+  VoidCallback? _onSearchShare;
+  VoidCallback? _onSearchDelete;
+  VoidCallback? _onSearchClose;
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<DashboardBloc, DashboardState>(
@@ -41,6 +48,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onNavigateToTab: (idx) {
                   context.read<DashboardBloc>().add(ChangeNavigationTab(idx));
                 },
+                onSelectionModeChanged: (isSelecting, count,
+                    {onChat, onShare, onDelete, onClose}) {
+                  setState(() {
+                    _isSearchSelectionMode = isSelecting;
+                    _searchSelectedCount = count;
+                    _onSearchChat = onChat;
+                    _onSearchShare = onShare;
+                    _onSearchDelete = onDelete;
+                    _onSearchClose = onClose;
+                  });
+                },
               ),
 
               // Tab 2: AI Chat & RAG Assistant (with its own Scaffold & ChatHeader)
@@ -57,7 +75,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             .add(const ChangeNavigationTab(0));
                       },
                     );
-
                   } catch (_) {
                     return const SizedBox.shrink();
                   }
@@ -65,42 +82,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          bottomNavigationBar: state.isSelectionMode
-              ? BatchActionBar(
-                  selectedCount: state.selectedCount,
-                  onChatTap: () {
-                    context
-                        .read<DashboardBloc>()
-                        .add(const ChangeNavigationTab(2));
-                  },
-                  onShareTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Sharing ${state.selectedCount} file(s)...',
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  onDeleteTap: () {
-                    _confirmBatchDelete(context, state.selectedCount);
-                  },
-                  onCloseTap: () {
-                    context
-                        .read<DashboardBloc>()
-                        .add(const ToggleSelectionMode(false));
-                  },
-                )
-              : DashboardBottomNav(
-                  currentIndex: state.currentNavIndex,
-                  onTabSelected: (index) {
-                    context
-                        .read<DashboardBloc>()
-                        .add(ChangeNavigationTab(index));
-                  },
-                ),
+          bottomNavigationBar: _buildBottomBar(context, state),
         );
+      },
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context, DashboardState state) {
+    final isSearchTab = state.currentNavIndex == 1;
+    final isDashboardTab = state.currentNavIndex == 0;
+
+    // Independent search selection mode bar
+    if (isSearchTab && _isSearchSelectionMode) {
+      return BatchActionBar(
+        selectedCount: _searchSelectedCount,
+        onChatTap: () => _onSearchChat?.call(),
+        onShareTap: () => _onSearchShare?.call(),
+        onDeleteTap: () => _onSearchDelete?.call(),
+        onCloseTap: () => _onSearchClose?.call(),
+      );
+    }
+
+    // Independent dashboard selection mode bar
+    if (isDashboardTab && state.isSelectionMode) {
+      return BatchActionBar(
+        selectedCount: state.selectedCount,
+        onChatTap: () {
+          context.read<DashboardBloc>().add(const ChangeNavigationTab(2));
+        },
+        onShareTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Sharing ${state.selectedCount} file(s)...',
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        },
+        onDeleteTap: () {
+          _confirmBatchDelete(context, state.selectedCount);
+        },
+        onCloseTap: () {
+          context.read<DashboardBloc>().add(const ToggleSelectionMode(false));
+        },
+      );
+    }
+
+    return DashboardBottomNav(
+      currentIndex: state.currentNavIndex,
+      onTabSelected: (index) {
+        context.read<DashboardBloc>().add(ChangeNavigationTab(index));
       },
     );
   }

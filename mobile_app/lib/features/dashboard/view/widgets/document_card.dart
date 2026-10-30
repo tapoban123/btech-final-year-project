@@ -10,6 +10,7 @@ class DocumentCard extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onMoreTap;
   final bool isSelectionMode;
+  final String? badgeText;
 
   const DocumentCard({
     super.key,
@@ -19,6 +20,7 @@ class DocumentCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onMoreTap,
+    this.badgeText,
   });
 
   @override
@@ -208,6 +210,30 @@ class DocumentCard extends StatelessWidget {
             color: AppColors.outline,
           ),
         ),
+        if (badgeText != null) ...[
+          const SizedBox(width: 6),
+          const Text('•', style: TextStyle(color: AppColors.outline, fontSize: 10)),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: AppColors.secondary.withValues(alpha: 0.3),
+                width: 0.8,
+              ),
+            ),
+            child: Text(
+              badgeText!,
+              style: AppTypography.labelSm.copyWith(
+                color: AppColors.secondary,
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

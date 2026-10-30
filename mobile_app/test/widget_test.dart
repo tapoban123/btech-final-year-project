@@ -186,18 +186,93 @@ void main() {
 
     // Verify Semantic Search elements
     expect(find.text('Semantic Search'), findsOneWidget);
-    expect(find.text('Search Scope:'), findsNothing);
-    expect(find.text('Search Results'), findsOneWidget);
-    expect(find.text('3 semantic matches found'), findsOneWidget);
+    expect(find.text('Results'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('semantic matches found'), findsNothing);
     expect(find.text('Q3_Financial_Analysis_Report.pdf'), findsOneWidget);
 
-    // Tap View in Chat to switch to Chat tab
-    final viewInChatButtons = find.text('View in Chat');
-    expect(viewInChatButtons, findsAtLeastNWidgets(1));
-    await tester.tap(viewInChatButtons.first);
+    // Tap more options on search card and tap Chat to switch to Chat tab
+    final moreVertButtons = find.byIcon(Icons.more_vert);
+    expect(moreVertButtons, findsAtLeastNWidgets(1));
+    await tester.tap(moreVertButtons.first);
+    await tester.pumpAndSettle();
+
+    final chatOption = find.text('Chat with this Document');
+    expect(chatOption, findsOneWidget);
+    await tester.tap(chatOption);
     await tester.pumpAndSettle();
 
     // Verify switched to ChatScreen
     expect(find.text('3 Active Contexts'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Selection states of search screen and dashboard screen are independent and do not interfere',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const OmniDocApp());
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    // 1. Initial State: Dashboard has Select button and bottom nav
+    expect(find.text('My Library'), findsOneWidget);
+    expect(find.text('Select'), findsOneWidget);
+
+    // 2. Navigate to Search Tab via bottom nav
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    // Search screen has its own independent Select button
+    expect(find.text('Semantic Search'), findsOneWidget);
+    expect(find.text('Select'), findsOneWidget);
+
+    // 3. Enter selection mode on Search screen
+    await tester.tap(find.text('Select'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel'), findsOneWidget);
+
+    // Select 2 items in Search
+    await tester.tap(find.text('Board_Meeting_Memo_Dictation.wav'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Executive_Strategy_Whiteboard.png'));
+    await tester.pumpAndSettle();
+
+    // Search screen's BatchActionBar displays 2 selected
+    expect(find.text('2 selected'), findsOneWidget);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('Share'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+
+    // 4. Cancel selection on Search screen
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select'), findsOneWidget);
+    expect(find.text('2 selected'), findsNothing);
+
+    // 5. Navigate back to Dashboard via bottom nav
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Library'), findsOneWidget);
+    expect(find.text('Select'), findsOneWidget);
+    expect(find.text('selected'), findsNothing);
+
+    // 6. Enter selection mode on Dashboard
+    await tester.tap(find.text('Select'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel'), findsOneWidget);
+
+    // Select 1 item in Dashboard
+    await tester.tap(find.text('Q3_Financial_Analysis_Report.pdf'));
+    await tester.pumpAndSettle();
+
+    // Dashboard BatchActionBar displays 1 selected
+    expect(find.text('1 selected'), findsOneWidget);
+
+    // Clean up Dashboard selection
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select'), findsOneWidget);
+    expect(find.text('1 selected'), findsNothing);
   });
 }
