@@ -168,17 +168,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_isSelectionMode) {
       _toggleDocumentSelection(item.id);
     } else {
-      if (widget.onOpenViewer != null) {
-        widget.onOpenViewer!(item);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('Opening dedicated viewer/listener for "${item.title}"'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      }
+      widget.onOpenViewer?.call(item);
     }
   }
 

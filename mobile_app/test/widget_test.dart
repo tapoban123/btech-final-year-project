@@ -138,10 +138,10 @@ void main() {
     // Verify Prompt Chips & Input
     expect(find.text('Summarize these docs'), findsOneWidget);
     expect(
-      find.text('Ask questions about the selection...'),
+      find.text('Ask a question...'),
       findsOneWidget,
     );
-    expect(find.byIcon(Icons.mic), findsOneWidget);
+    expect(find.byIcon(Icons.mic), findsNothing);
 
     // Send a message using the ChatScreen input
     final chatInput = find.descendant(

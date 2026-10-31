@@ -172,7 +172,6 @@ void main() {
         (tester) async {
       final controller = TextEditingController();
       String sentMessage = '';
-      bool micPressed = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -180,11 +179,13 @@ void main() {
             body: ChatInputBar(
               controller: controller,
               onSend: (val) => sentMessage = val,
-              onVoiceRecordTap: () => micPressed = true,
             ),
           ),
         ),
       );
+
+      expect(find.text('Ask a question...'), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsNothing);
 
       await tester.enterText(
         find.byType(TextField),
@@ -194,9 +195,6 @@ void main() {
 
       expect(sentMessage, 'Give a breakdown of the budget');
       expect(controller.text, isEmpty);
-
-      await tester.tap(find.byIcon(Icons.mic));
-      expect(micPressed, isTrue);
     });
   });
 }

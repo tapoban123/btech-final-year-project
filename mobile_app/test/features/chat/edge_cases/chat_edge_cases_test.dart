@@ -56,7 +56,7 @@ void main() {
 
       expect(find.text('2 Active Contexts'), findsOneWidget);
       expect(find.text('Manage'), findsOneWidget);
-      expect(find.text('Ask questions about the selection...'), findsOneWidget);
+      expect(find.text('Ask a question...'), findsOneWidget);
     });
 
     testWidgets('opening and closing Manage Contexts bottom sheet',

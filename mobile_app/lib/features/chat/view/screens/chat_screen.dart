@@ -231,16 +231,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                     .read<ChatBloc>()
                                     .add(SendChatMessage(text));
                               },
-                              onVoiceRecordTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Multimodal Voice Dictation Active (Listening...)',
-                                    ),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              },
                             ),
                           ),
                         ],
