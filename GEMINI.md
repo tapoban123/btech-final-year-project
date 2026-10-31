@@ -111,14 +111,40 @@ backend/
 
 ---
 
-## 6. Testing & Evaluation
+## 6. Strict Test-Driven Development (TDD) & Quality Assurance
 
-- **Unit Testing:**
-  - Test chunking algorithms, data transformations, and core service functions with mock dependencies using `pytest`.
-- **Integration Testing:**
-  - Validate end-to-end ingestion pipelines and FastAPI endpoints (`TestClient`).
-- **RAG Quality Evaluation:**
-  - Track RAG performance against standard benchmarks (Faithfulness, Answer Relevance, Context Recall) before modifying prompt templates or retrieval strategies.
+All contributions must follow strict **Test-Driven Development (TDD)** principles (**Red $\rightarrow$ Green $\rightarrow$ Refactor**). Every feature must be validated by automated test suites before being merged or considered complete.
+
+### 6.1. TDD Workflow Guidelines
+1. **Write Tests First / Concurrently:** Define the expected behavior, domain contracts, and failure modes in tests prior to finalizing business logic.
+2. **Deterministic & Isolated:** Tests must never depend on live external network calls, remote databases, or uncontrolled random delays. Always use mocks (`mocktail` / `pytest-mock`).
+3. **No Flaky Tests:** Keep widget test trees constrained, pump fake async timers cleanly, and avoid unbounded loops.
+
+### 6.2. Test Hierarchy per Feature (Flutter Client)
+Each feature directory under `features/<feature>/` must be accompanied by matching test coverage under `test/features/<feature>/`:
+
+1. **Unit Tests (`unit/`):**
+   - Test domain models (`DocumentItem`, `ChatMessage`, `SynthesisPoint`, etc.), `copyWith`, and value equality (`Equatable`).
+   - Test repository data transformations and parsing logic in isolation.
+2. **API & Mock Response Tests (`api/`):**
+   - Test API client behaviors against mocked JSON responses using `mocktail`.
+   - Validate HTTP 200 success paths, empty payload scenarios, HTTP 400/500 exceptions, and network timeouts.
+3. **BLoC / State Management Tests (`blocs/`):**
+   - Use `bloc_test` to verify event-to-state stream transitions.
+   - Test initial states, asynchronous loading sequences, state updates on user interactions, and error state transitions.
+4. **Widget & Screen Interaction Tests (`view/`):**
+   - Test component rendering, semantic texts, icons, and theme bindings.
+   - Simulate user gestures (tapping chips, toggling selections, entering text in search/chat input, tapping action buttons, sheet modals).
+5. **Edge Case Tests (`edge_cases/`):**
+   - Test empty list states (*"No documents found"*).
+   - Test extreme search queries (special characters, whitespace, case-insensitivity, no-match queries).
+   - Test multi-selection toggles (selecting, unselecting, batch actions on 0 vs N items).
+   - Test rapid message dispatching and feedback toggles in chat.
+
+### 6.3. Backend Testing (FastAPI)
+- **Unit Testing:** Validate semantic chunking, prompt templating, and vector math with mock dependencies using `pytest`.
+- **Integration Testing:** Test FastAPI HTTP routes and background tasks using `httpx.AsyncClient` or FastAPI's `TestClient`.
+- **RAG Quality Evaluation:** Track RAG performance against standard benchmarks (Faithfulness, Answer Relevance, Context Recall) before modifying retrieval strategies.
 
 ---
 
