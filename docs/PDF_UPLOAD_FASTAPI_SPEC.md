@@ -48,7 +48,8 @@ Currently, `UploadApiClient` returns mock responses, while FastAPI only exposes 
 
 | Field | Type | Required |
 |---|---|---|
-| file | Binary PDF | Yes |
+| item | String metadata for the upload batch | Yes |
+| files | One or more binary PDFs; repeat this field for each file | Yes |
 
 Future optional fields: `title`, `collection_id`.
 
@@ -56,12 +57,20 @@ Future optional fields: `title`, `collection_id`.
 
 ```json
 {
-  "id": "doc_01JABC123",
-  "filename": "report.pdf",
-  "content_type": "application/pdf",
-  "size_bytes": 245760,
-  "status": "uploaded",
-  "message": "PDF uploaded successfully"
+  "item": "research-documents",
+  "total_files": 2,
+  "successful": 2,
+  "failed": 0,
+  "results": [
+    {
+      "id": "doc_01JABC123",
+      "filename": "report.pdf",
+      "content_type": "application/pdf",
+      "size_bytes": 245760,
+      "status": "uploaded",
+      "message": "PDF uploaded successfully"
+    }
+  ]
 }
 ```
 

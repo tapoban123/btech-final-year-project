@@ -11,11 +11,12 @@ pydantic-settings
 PyMuPDF
 tiktoken
 
-# RAG model provider and embeddings
+# LangGraph orchestration and xAI-compatible Grok client
+langgraph
 openai
 
 # Vector database
-chromadb
+pinecone
 
 # Document metadata persistence
 SQLAlchemy
