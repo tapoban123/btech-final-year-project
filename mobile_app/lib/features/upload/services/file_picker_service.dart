@@ -18,8 +18,7 @@ class FilePickerService implements IFilePickerService {
     try {
       final result = await FilePicker.pickFiles(
         type: type,
-        allowedExtensions:
-            type == FileType.custom ? allowedExtensions : null,
+        allowedExtensions: type == FileType.custom ? allowedExtensions : null,
       );
       return result;
     } catch (e, stack) {

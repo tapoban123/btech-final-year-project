@@ -1,12 +1,7 @@
 import 'package:equatable/equatable.dart';
 import '../../../dashboard/repository/models/document_item.dart';
 
-enum UploadProcessingStatus {
-  queued,
-  processing,
-  completed,
-  failed,
-}
+enum UploadProcessingStatus { queued, processing, completed, failed }
 
 class UploadItem extends Equatable {
   final String id;
@@ -17,6 +12,8 @@ class UploadItem extends Equatable {
   final double? progress;
   final String? filePath;
   final int? fileSize;
+  final String? documentId;
+  final String? errorMessage;
 
   const UploadItem({
     required this.id,
@@ -27,6 +24,8 @@ class UploadItem extends Equatable {
     this.progress,
     this.filePath,
     this.fileSize,
+    this.documentId,
+    this.errorMessage,
   });
 
   UploadItem copyWith({
@@ -38,6 +37,8 @@ class UploadItem extends Equatable {
     double? progress,
     String? filePath,
     int? fileSize,
+    String? documentId,
+    String? errorMessage,
   }) {
     return UploadItem(
       id: id ?? this.id,
@@ -48,18 +49,20 @@ class UploadItem extends Equatable {
       progress: progress ?? this.progress,
       filePath: filePath ?? this.filePath,
       fileSize: fileSize ?? this.fileSize,
+      documentId: documentId ?? this.documentId,
+      errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 
   @override
   List<Object?> get props => [
-        id,
-        title,
-        type,
-        stageDescription,
-        status,
-        progress,
-        filePath,
-        fileSize,
-      ];
+    id,
+    title,
+    type,
+    stageDescription,
+    status,
+    progress,
+    filePath,
+    fileSize,
+  ];
 }
