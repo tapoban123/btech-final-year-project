@@ -1,1 +1,29 @@
+# API server and multipart file uploads
 fastapi[standard]
+python-multipart
+uvicorn[standard]
+
+# Environment and validation
+python-dotenv
+pydantic-settings
+
+# PDF extraction and document processing
+PyMuPDF
+tiktoken
+
+# RAG model provider and embeddings
+openai
+
+# Vector database
+chromadb
+
+# Document metadata persistence
+SQLAlchemy
+aiosqlite
+
+# HTTP and asynchronous utilities
+httpx
+
+# Testing
+pytest
+pytest-asyncio

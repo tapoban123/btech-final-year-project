@@ -17,7 +17,7 @@ class UploadRepository implements IUploadRepository {
   final UploadApiClient _apiClient;
 
   UploadRepository({UploadApiClient? apiClient})
-      : _apiClient = apiClient ?? UploadApiClient();
+    : _apiClient = apiClient ?? UploadApiClient();
 
   @override
   Future<List<UploadItem>> getRecentUploads() async {
@@ -32,9 +32,14 @@ class UploadRepository implements IUploadRepository {
     String? filePath,
     int? fileSize,
   }) async {
-    final raw = await _apiClient.uploadFileRaw(filename, type.name);
+    final raw = filePath != null
+        ? await _apiClient.uploadPdf(filePath: filePath, filename: filename)
+        : await _apiClient.uploadFileRaw(filename, type.name);
     final item = _mapToUploadItem(raw);
-    return item.copyWith(filePath: filePath, fileSize: fileSize);
+    return item.copyWith(
+      filePath: filePath,
+      fileSize: fileSize,
+    );
   }
 
   @override
@@ -66,6 +71,8 @@ class UploadRepository implements IUploadRepository {
     final UploadProcessingStatus status;
     switch (statusStr) {
       case 'completed':
+      case 'uploaded':
+      case 'ready':
         status = UploadProcessingStatus.completed;
         break;
       case 'failed':
@@ -79,10 +86,13 @@ class UploadRepository implements IUploadRepository {
 
     return UploadItem(
       id: raw['id'] as String,
-      title: raw['title'] as String,
+      title:
+          (raw['title'] as String?) ??
+          (raw['filename'] as String? ?? 'Unnamed PDF'),
       type: docType,
       stageDescription: raw['stageDescription'] as String? ?? '',
       status: status,
+      documentId: raw['id'] as String?,
     );
   }
 }

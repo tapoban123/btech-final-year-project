@@ -16,10 +16,10 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
   UploadBloc({
     IUploadRepository? repository,
     IAudioRecordingService? audioRecordingService,
-  })  : _repository = repository ?? UploadRepository(),
-        _audioRecordingService =
-            audioRecordingService ?? AudioRecordingService(),
-        super(const UploadState()) {
+  }) : _repository = repository ?? UploadRepository(),
+       _audioRecordingService =
+           audioRecordingService ?? AudioRecordingService(),
+       super(const UploadState()) {
     on<LoadUploadData>(_onLoadUploadData);
     on<TriggerFileUpload>(_onTriggerFileUpload);
     on<TriggerMultipleFilesUpload>(_onTriggerMultipleFilesUpload);
@@ -40,15 +40,19 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
     emit(state.copyWith(status: UploadScreenStatus.loading));
     try {
       final uploads = await _repository.getRecentUploads();
-      emit(state.copyWith(
-        status: UploadScreenStatus.success,
-        recentUploads: uploads,
-      ));
+      emit(
+        state.copyWith(
+          status: UploadScreenStatus.success,
+          recentUploads: uploads,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: UploadScreenStatus.failure,
-        errorMessage: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          status: UploadScreenStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 
@@ -69,10 +73,12 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
       fileSize: event.fileSize,
     );
     final updatedList = List.of(state.recentUploads)..insert(0, stagedItem);
-    emit(state.copyWith(
-      recentUploads: updatedList,
-      status: UploadScreenStatus.success,
-    ));
+    emit(
+      state.copyWith(
+        recentUploads: updatedList,
+        status: UploadScreenStatus.success,
+      ),
+    );
   }
 
   void _onTriggerMultipleFilesUpload(
@@ -95,21 +101,19 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
       );
     }).toList();
     final updatedList = List.of(state.recentUploads)..insertAll(0, stagedItems);
-    emit(state.copyWith(
-      recentUploads: updatedList,
-      status: UploadScreenStatus.success,
-    ));
+    emit(
+      state.copyWith(
+        recentUploads: updatedList,
+        status: UploadScreenStatus.success,
+      ),
+    );
   }
 
-  void _onRemoveUploadItem(
-    RemoveUploadItem event,
-    Emitter<UploadState> emit,
-  ) {
-    final updatedList =
-        state.recentUploads.where((item) => item.id != event.itemId).toList();
-    emit(state.copyWith(
-      recentUploads: updatedList,
-    ));
+  void _onRemoveUploadItem(RemoveUploadItem event, Emitter<UploadState> emit) {
+    final updatedList = state.recentUploads
+        .where((item) => item.id != event.itemId)
+        .toList();
+    emit(state.copyWith(recentUploads: updatedList));
   }
 
   Future<void> _onConfirmAndUploadAll(
@@ -123,55 +127,62 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
     if (itemsToUpload.isEmpty) return;
 
     // Transition all queued items to processing
-    emit(state.copyWith(
-      isUploading: true,
-      status: UploadScreenStatus.loading,
-      recentUploads: state.recentUploads.map((item) {
-        if (item.status != UploadProcessingStatus.completed) {
-          return item.copyWith(
-            status: UploadProcessingStatus.processing,
-          );
-        }
-        return item;
-      }).toList(),
-    ));
+    emit(
+      state.copyWith(
+        isUploading: true,
+        status: UploadScreenStatus.loading,
+        recentUploads: state.recentUploads.map((item) {
+          if (item.status != UploadProcessingStatus.completed) {
+            return item.copyWith(status: UploadProcessingStatus.processing);
+          }
+          return item;
+        }).toList(),
+      ),
+    );
 
     try {
-      // Execute all uploads in parallel
+      // Execute all uploads in parallel while retaining the staged item ID.
       final uploadFutures = itemsToUpload.map((item) async {
-        return await _repository.uploadFile(
+        final result = await _repository.uploadFile(
           item.title,
           item.type,
           filePath: item.filePath,
           fileSize: item.fileSize,
         );
+        return MapEntry(item.id, result);
       }).toList();
 
       final results = await Future.wait(uploadFutures);
 
-      final resultMap = {for (var r in results) r.title: r};
+      final resultMap = {for (final entry in results) entry.key: entry.value};
       final updatedList = state.recentUploads.map((item) {
-        final result = resultMap[item.title];
+        final result = resultMap[item.id];
         if (result != null) {
           return result.copyWith(
             status: UploadProcessingStatus.completed,
             stageDescription: item.stageDescription,
+            filePath: item.filePath,
+            fileSize: item.fileSize,
           );
         }
         return item;
       }).toList();
 
-      emit(state.copyWith(
-        isUploading: false,
-        status: UploadScreenStatus.success,
-        recentUploads: updatedList,
-      ));
+      emit(
+        state.copyWith(
+          isUploading: false,
+          status: UploadScreenStatus.success,
+          recentUploads: updatedList,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        isUploading: false,
-        status: UploadScreenStatus.failure,
-        errorMessage: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          isUploading: false,
+          status: UploadScreenStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 
@@ -179,13 +190,15 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
     OpenVoiceRecorder event,
     Emitter<UploadState> emit,
   ) {
-    emit(state.copyWith(
-      isRecordingCardVisible: true,
-      isRecording: false,
-      recordingDurationSeconds: 0,
-      currentAmplitude: 0.0,
-      speechDetectionMessage: 'Listening...',
-    ));
+    emit(
+      state.copyWith(
+        isRecordingCardVisible: true,
+        isRecording: false,
+        recordingDurationSeconds: 0,
+        currentAmplitude: 0.0,
+        speechDetectionMessage: 'Listening...',
+      ),
+    );
   }
 
   Future<void> _onStartVoiceRecording(
@@ -195,11 +208,13 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
     try {
       final hasPermission = await _audioRecordingService.hasPermission();
       if (!hasPermission) {
-        emit(state.copyWith(
-          status: UploadScreenStatus.failure,
-          errorMessage:
-              'Microphone permission is required to record voice notes',
-        ));
+        emit(
+          state.copyWith(
+            status: UploadScreenStatus.failure,
+            errorMessage:
+                'Microphone permission is required to record voice notes',
+          ),
+        );
         return;
       }
 
@@ -215,18 +230,22 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
         (amp) => add(UpdateVoiceAmplitude(amp)),
       );
 
-      emit(state.copyWith(
-        isRecordingCardVisible: true,
-        isRecording: true,
-        recordingDurationSeconds: 0,
-        currentAmplitude: 0.15,
-        speechDetectionMessage: 'Listening...',
-      ));
+      emit(
+        state.copyWith(
+          isRecordingCardVisible: true,
+          isRecording: true,
+          recordingDurationSeconds: 0,
+          currentAmplitude: 0.15,
+          speechDetectionMessage: 'Listening...',
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: UploadScreenStatus.failure,
-        errorMessage: 'Failed to start recording: ${e.toString()}',
-      ));
+      emit(
+        state.copyWith(
+          status: UploadScreenStatus.failure,
+          errorMessage: 'Failed to start recording: ${e.toString()}',
+        ),
+      );
     }
   }
 
@@ -246,12 +265,14 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
     _amplitudeSubscription?.cancel();
     _amplitudeSubscription = null;
     await _audioRecordingService.cancel();
-    emit(state.copyWith(
-      isRecording: false,
-      isRecordingCardVisible: false,
-      recordingDurationSeconds: 0,
-      currentAmplitude: 0.0,
-    ));
+    emit(
+      state.copyWith(
+        isRecording: false,
+        isRecordingCardVisible: false,
+        recordingDurationSeconds: 0,
+        currentAmplitude: 0.0,
+      ),
+    );
   }
 
   Future<void> _onStopAndSaveVoiceRecording(
@@ -276,18 +297,22 @@ class UploadBloc extends Bloc<UploadEvent, UploadState> {
       );
 
       final updated = List.of(state.recentUploads)..insert(0, stagedMemo);
-      emit(state.copyWith(
-        isRecordingCardVisible: false,
-        recordingDurationSeconds: 0,
-        currentAmplitude: 0.0,
-        recentUploads: updated,
-        status: UploadScreenStatus.success,
-      ));
+      emit(
+        state.copyWith(
+          isRecordingCardVisible: false,
+          recordingDurationSeconds: 0,
+          currentAmplitude: 0.0,
+          recentUploads: updated,
+          status: UploadScreenStatus.success,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: UploadScreenStatus.failure,
-        errorMessage: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          status: UploadScreenStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 
