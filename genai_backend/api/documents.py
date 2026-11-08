@@ -22,6 +22,8 @@ router = APIRouter(tags=["documents"])
 storage = DocumentStorage()
 logger = logging.getLogger(__name__)
 MAX_PDF_SIZE = int(os.getenv("MAX_PDF_SIZE_MB", "25")) * 1024 * 1024
+MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
+IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 
 
 def _error(code: str, message: str, http_status: int) -> HTTPException:
@@ -43,6 +45,10 @@ def _error(code: str, message: str, http_status: int) -> HTTPException:
                         "type": "object",
                         "required": ["files"],
                         "properties": {
+                            "collection_id": {
+                                "type": "string",
+                                "description": "Existing collection to append to; omit to create one.",
+                            },
                             "files": {
                                 "type": "array",
                                 "items": {"type": "string", "format": "binary"},
@@ -55,6 +61,7 @@ def _error(code: str, message: str, http_status: int) -> HTTPException:
     },
 )
 async def upload_documents(
+    collection_id: str | None = Form(None),
     files: List[UploadFile] = File(
         ...,
         description="One or more PDF files. Select multiple files using the file picker.",
@@ -62,7 +69,10 @@ async def upload_documents(
 ) -> DocumentBatchUploadResponse:
     if not files:
         raise _error("NO_FILES", "At least one PDF file is required", 400)
-    collection_id = f"collection_{uuid4().hex}"
+    requested_collection_id = collection_id
+    collection_id = collection_id or f"collection_{uuid4().hex}"
+    if requested_collection_id and not storage.collection_exists(collection_id):
+        raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
     results: list[DocumentUploadResponse] = []
     for file in files:
         results.append(await _upload_document(file, collection_id))
@@ -169,7 +179,8 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
                 collection_id=collection_id,
                 document_id=document_id,
                 document_name=Path(filename).name,
-                pdf_path=final_path,
+                file_path=final_path,
+                content_type="application/pdf",
             )
         except Exception as exc:
             logger.exception("[RAG] processing failed for document_id=%s", document_id)
@@ -220,6 +231,118 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
 
 
 @router.post(
+    "/documents/images/upload",
+    response_model=DocumentBatchUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["files"],
+                        "properties": {
+                            "collection_id": {
+                                "type": "string",
+                                "description": "Existing collection to append to; omit to create one.",
+                            },
+                            "files": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "binary"},
+                                "description": "One or more PNG, JPEG, or WebP images.",
+                            },
+                        },
+                    }
+                }
+            }
+        }
+    },
+)
+async def upload_images(
+    collection_id: str | None = Form(None),
+    files: List[UploadFile] = File(..., description="One or more PNG, JPEG, or WebP images."),
+) -> DocumentBatchUploadResponse:
+    requested_collection_id = collection_id
+    collection_id = collection_id or f"collection_{uuid4().hex}"
+    if requested_collection_id and not storage.collection_exists(collection_id):
+        raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
+    if not files:
+        raise _error("NO_FILES", "At least one image file is required", 400)
+    results = [await _upload_image(file, collection_id) for file in files]
+    successful = sum(result.status == "uploaded" for result in results)
+    return DocumentBatchUploadResponse(
+        collection_id=collection_id,
+        total_files=len(results),
+        successful=successful,
+        failed=len(results) - successful,
+        results=results,
+    )
+
+
+async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadResponse:
+    filename = Path(file.filename or "").name
+    content_type = file.content_type or ""
+    if content_type not in IMAGE_TYPES:
+        return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=0,
+                                      status="failed", message="Only PNG, JPEG, and WebP images are supported")
+    document_id = f"doc_{uuid4().hex}"
+    temporary_path: Path | None = None
+    size_bytes = 0
+    final_path = storage.upload_dir / f"{document_id}{IMAGE_TYPES[content_type]}"
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", prefix=f"{document_id}_", suffix=".tmp",
+                                         dir=storage.upload_dir, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size_bytes += len(chunk)
+                if size_bytes > MAX_IMAGE_SIZE:
+                    return DocumentUploadResponse(filename=filename, content_type=content_type,
+                                                  size_bytes=size_bytes, status="failed",
+                                                  message="The image exceeds the configured size limit")
+                temporary.write(chunk)
+        if size_bytes == 0:
+            return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=0,
+                                          status="failed", message="The image file is empty")
+        temporary_path.replace(final_path)
+        metadata = {
+            "id": document_id, "document_id": document_id, "collection_id": collection_id,
+            "original_filename": filename, "stored_filename": final_path.name,
+            "content_type": content_type, "size_bytes": size_bytes, "status": "uploaded",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        storage.save_metadata(metadata)
+        try:
+            rag_pipeline.prepare_document(collection_id=collection_id, document_id=document_id,
+                                          document_name=filename, file_path=final_path,
+                                          content_type=content_type)
+        except Exception as exc:
+            logger.exception("[RAG] image processing failed for document_id=%s", document_id)
+            try:
+                rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
+            except Exception:
+                logger.exception("[RAG] image cleanup failed for document_id=%s", document_id)
+            final_path.unlink(missing_ok=True)
+            storage.delete_document_metadata(document_id)
+            return DocumentUploadResponse(id=document_id, document_id=document_id, collection_id=collection_id,
+                                          filename=filename, content_type=content_type, size_bytes=size_bytes,
+                                          status="failed", message=f"Could not process the image: {exc}")
+        return DocumentUploadResponse(id=document_id, document_id=document_id, collection_id=collection_id,
+                                      filename=filename, content_type=content_type, size_bytes=size_bytes,
+                                      status="uploaded", message="Image analyzed and indexed successfully")
+    except OSError as exc:
+        logger.exception("[UPLOAD] image storage failed for filename=%r", filename)
+        return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=size_bytes,
+                                      status="failed", message=f"Could not store the image: {exc}")
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink(missing_ok=True)
+        await file.close()
+
+
+@router.post(
     "/documents/query",
     response_model=MultiDocumentQueryResponse,
     status_code=status.HTTP_200_OK,
@@ -260,7 +383,7 @@ def delete_collection_document(collection_id: str, document_id: str) -> dict[str
         raise _error("DOCUMENT_NOT_FOUND", "The requested document does not exist in this collection", 404)
     try:
         rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
-        storage.document_path(document_id).unlink(missing_ok=True)
+        storage.document_path(document_id, record.get("stored_filename")).unlink(missing_ok=True)
         storage.delete_document_metadata(document_id)
     except Exception as exc:
         logger.exception("[RAG] document deletion failed for document_id=%s", document_id)
@@ -276,7 +399,7 @@ def delete_collection(collection_id: str) -> dict[str, str]:
     try:
         rag_pipeline.delete_collection(collection_id)
         for record in records:
-            storage.document_path(record["id"]).unlink(missing_ok=True)
+            storage.document_path(record["id"], record.get("stored_filename")).unlink(missing_ok=True)
         storage.delete_collection_metadata(collection_id)
     except Exception as exc:
         logger.exception("[RAG] collection deletion failed for collection_id=%s", collection_id)

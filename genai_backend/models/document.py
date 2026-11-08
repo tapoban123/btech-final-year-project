@@ -22,6 +22,10 @@ class DocumentBatchUploadResponse(BaseModel):
     results: list[DocumentUploadResponse]
 
 
+class ImageBatchUploadResponse(DocumentBatchUploadResponse):
+    pass
+
+
 class DocumentMetadata(BaseModel):
     id: str
     collection_id: str

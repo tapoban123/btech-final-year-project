@@ -48,8 +48,13 @@ class DocumentStorage:
         except json.JSONDecodeError:
             return []
 
-    def document_path(self, document_id: str) -> Path:
-        """Return the generated PDF path; IDs never come from user filenames."""
+    def document_path(self, document_id: str, stored_filename: str | None = None) -> Path:
+        """Return a stored document path; IDs and filenames are never trusted blindly."""
         if not document_id.startswith("doc_") or "/" in document_id or "\\" in document_id:
             raise ValueError("Invalid document ID")
+        if stored_filename:
+            candidate = Path(stored_filename).name
+            if candidate != stored_filename or not candidate.startswith(f"{document_id}."):
+                raise ValueError("Invalid stored filename")
+            return self.upload_dir / candidate
         return self.upload_dir / f"{document_id}.pdf"
