@@ -1,1 +1,31 @@
+# API server and multipart file uploads
 fastapi[standard]
+python-multipart
+uvicorn[standard]
+
+# Environment and validation
+python-dotenv
+pydantic-settings
+
+# PDF extraction and document processing
+PyMuPDF
+tiktoken
+
+# LangGraph orchestration and LLM clients
+langgraph
+openai
+google-genai
+
+# Vector database
+pinecone
+
+# Document metadata persistence
+SQLAlchemy
+aiosqlite
+
+# HTTP and asynchronous utilities
+httpx
+
+# Testing
+pytest
+pytest-asyncio
