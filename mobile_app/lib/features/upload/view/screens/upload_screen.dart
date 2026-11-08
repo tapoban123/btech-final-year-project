@@ -89,9 +89,9 @@ class _UploadScreenState extends State<UploadScreen> {
                       UploadActionCards(
                         onUploadFilesTap: () => _handleFileUpload(context),
                         onRecordVoiceTap: () {
-                          context.read<UploadBloc>().add(
-                            const OpenVoiceRecorder(),
-                          );
+                          context
+                              .read<UploadBloc>()
+                              .add(const OpenVoiceRecorder());
                         },
                       ),
                       const SizedBox(height: 12),
@@ -103,14 +103,14 @@ class _UploadScreenState extends State<UploadScreen> {
                           formattedTime: state.formattedDuration,
                           amplitude: state.currentAmplitude,
                           onRecord: () {
-                            context.read<UploadBloc>().add(
-                              const StartVoiceRecording(),
-                            );
+                            context
+                                .read<UploadBloc>()
+                                .add(const StartVoiceRecording());
                           },
                           onDone: () {
-                            context.read<UploadBloc>().add(
-                              const StopAndSaveVoiceRecording(),
-                            );
+                            context
+                                .read<UploadBloc>()
+                                .add(const StopAndSaveVoiceRecording());
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Voice Memo saved'),
@@ -119,9 +119,9 @@ class _UploadScreenState extends State<UploadScreen> {
                             );
                           },
                           onDelete: () {
-                            context.read<UploadBloc>().add(
-                              const CancelVoiceRecording(),
-                            );
+                            context
+                                .read<UploadBloc>()
+                                .add(const CancelVoiceRecording());
                           },
                         ),
                         const SizedBox(height: 12),
@@ -133,9 +133,9 @@ class _UploadScreenState extends State<UploadScreen> {
                           isExpanded: true,
                           uploads: state.recentUploads,
                           onRemoveItem: (itemId) {
-                            context.read<UploadBloc>().add(
-                              RemoveUploadItem(itemId),
-                            );
+                            context
+                                .read<UploadBloc>()
+                                .add(RemoveUploadItem(itemId));
                           },
                           onPreviewItem: (item) {
                             FilePreviewModal.show(
@@ -157,7 +157,10 @@ class _UploadScreenState extends State<UploadScreen> {
             decoration: const BoxDecoration(
               color: AppColors.surfaceContainerLowest,
               border: Border(
-                top: BorderSide(color: AppColors.outlineVariant, width: 1.0),
+                top: BorderSide(
+                  color: AppColors.outlineVariant,
+                  width: 1.0,
+                ),
               ),
             ),
             child: SafeArea(
@@ -178,12 +181,12 @@ class _UploadScreenState extends State<UploadScreen> {
                       child: ElevatedButton(
                         onPressed:
                             state.recentUploads.isNotEmpty && !state.isUploading
-                            ? () {
-                                context.read<UploadBloc>().add(
-                                  const ConfirmAndUploadAll(),
-                                );
-                              }
-                            : null,
+                                ? () {
+                                    context
+                                        .read<UploadBloc>()
+                                        .add(const ConfirmAndUploadAll());
+                                  }
+                                : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: AppColors.onPrimary,
@@ -352,7 +355,11 @@ class _UploadScreenState extends State<UploadScreen> {
               ),
             ),
             const Spacer(),
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.outline),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.outline,
+            ),
           ],
         ),
       ),
@@ -382,8 +389,8 @@ class _UploadScreenState extends State<UploadScreen> {
         }).toList();
 
         context.read<UploadBloc>().add(
-          TriggerMultipleFilesUpload(selectedFiles),
-        );
+              TriggerMultipleFilesUpload(selectedFiles),
+            );
 
         final count = files.length;
         final message = count == 1
@@ -401,9 +408,7 @@ class _UploadScreenState extends State<UploadScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Storage or media permission is required to select files.',
-            ),
+            content: Text('Storage or media permission is required to select files.'),
             backgroundColor: AppColors.error,
             duration: Duration(seconds: 3),
           ),

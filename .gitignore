@@ -63,6 +63,3 @@ GoogleService-Info.plist
 logs/
 *.pid
 *.seed
-# Local PDF upload storage
-genai_backend/storage/
-genai_backend/.env
