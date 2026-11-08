@@ -11,9 +11,10 @@ pydantic-settings
 PyMuPDF
 tiktoken
 
-# LangGraph orchestration and xAI-compatible Grok client
+# LangGraph orchestration and LLM clients
 langgraph
 openai
+google-genai
 
 # Vector database
 pinecone
