@@ -12,6 +12,9 @@ from models.document import (
     DocumentMetadata,
     DocumentBatchUploadResponse,
     DocumentUploadResponse,
+    DocumentSearchRequest,
+    DocumentSearchResponse,
+    DocumentSearchResult,
 )
 from models.rag import DocumentQueryRequest, MultiDocumentQueryResponse
 from services.document_storage import DocumentStorage
@@ -31,6 +34,8 @@ USER_ID = os.getenv("DUMMY_USER_ID", "local-test-user")
 def _canonical_cloudinary_id(result: dict, expected_id: str) -> str:
     """Return the ID shared by Cloudinary, metadata, and Pinecone."""
     public_id = str(result.get("public_id") or expected_id).strip()
+    if public_id.endswith(".tmp"):
+        public_id = public_id[:-len(".tmp")]
     if public_id != expected_id:
         raise RuntimeError(
             f"Cloudinary returned public_id={public_id!r}; expected {expected_id!r}"
@@ -157,7 +162,15 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
 
         logger.info("[UPLOAD] received file: filename=%r size_bytes=%d", filename, size_bytes)
         cloudinary_result = cloudinary_storage.upload(
-            temporary_path, public_id=document_id, content_type="application/pdf"
+            temporary_path,
+            public_id=document_id,
+            content_type="application/pdf",
+            context={
+                "document_id": document_id,
+                "original_filename": Path(filename).name,
+                "content_type": "application/pdf",
+            },
+            tags=["document", "pdf"],
         )
         cloudinary_public_id = _canonical_cloudinary_id(cloudinary_result, document_id)
         metadata = {
@@ -170,6 +183,7 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
             "size_bytes": size_bytes,
             "status": "processing",
             "cloudinary_public_id": cloudinary_public_id,
+            "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
             "cloudinary_asset_id": cloudinary_result.get("asset_id"),
             "cloudinary_resource_type": cloudinary_result.get("resource_type", "raw"),
         }
@@ -301,7 +315,15 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
             return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=0,
                                           status="failed", message="The image file is empty")
         cloudinary_result = cloudinary_storage.upload(
-            temporary_path, public_id=document_id, content_type=content_type
+            temporary_path,
+            public_id=document_id,
+            content_type=content_type,
+            context={
+                "document_id": document_id,
+                "original_filename": filename,
+                "content_type": content_type,
+            },
+            tags=["document", "image"],
         )
         cloudinary_public_id = _canonical_cloudinary_id(cloudinary_result, document_id)
         metadata = {
@@ -310,6 +332,7 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
             "original_filename": filename, "stored_filename": None,
             "content_type": content_type, "size_bytes": size_bytes, "status": "processing",
             "cloudinary_public_id": cloudinary_public_id,
+            "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
             "cloudinary_asset_id": cloudinary_result.get("asset_id"),
             "cloudinary_resource_type": cloudinary_result.get("resource_type", "image"),
         }
@@ -358,6 +381,36 @@ def query_documents(request: DocumentQueryRequest) -> MultiDocumentQueryResponse
         logger.exception("[RAG] query failed")
         raise _error("RAG_QUERY_FAILED", "Could not answer the question", 500) from exc
     return MultiDocumentQueryResponse(**result)
+
+
+@router.post("/documents/search", response_model=DocumentSearchResponse)
+def search_documents(request: DocumentSearchRequest) -> DocumentSearchResponse:
+    """Return unique, user-owned documents matching a semantic query."""
+    logger.info("[SEARCH] endpoint received query_length=%d user_id=%s", len(request.query), USER_ID)
+    try:
+        ranked_ids = rag_pipeline.search_document_ids(user_id=USER_ID, query=request.query)
+        logger.info("[SEARCH] fetching Supabase records for ranked_ids=%r", ranked_ids)
+        records = storage.get_metadata_for_ids(ranked_ids, USER_ID)
+        logger.info("[SEARCH] Supabase returned %d records", len(records))
+    except RuntimeError as exc:
+        raise _error("DOCUMENT_SEARCH_NOT_CONFIGURED", str(exc), 503) from exc
+    except Exception as exc:
+        logger.exception("[SEARCH] document search failed")
+        raise _error("DOCUMENT_SEARCH_FAILED", "Could not search documents", 500) from exc
+
+    records_by_id = {record["document_id"]: record for record in records}
+    return DocumentSearchResponse(
+        query=request.query,
+        documents=[
+            DocumentSearchResult(
+                document_id=document_id,
+                filename=records_by_id[document_id]["original_filename"],
+                cloudinary_url=records_by_id[document_id].get("cloudinary_url"),
+            )
+            for document_id in ranked_ids
+            if document_id in records_by_id
+        ],
+    )
 
 
 @router.get("/documents", response_model=DocumentsResponse)

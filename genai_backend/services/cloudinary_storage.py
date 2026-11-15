@@ -31,11 +31,20 @@ class CloudinaryStorage:
             )
         self._configured = True
 
-    def upload(self, file_path: Path, *, public_id: str, content_type: str) -> dict[str, Any]:
+    def upload(
+        self,
+        file_path: Path,
+        *,
+        public_id: str,
+        content_type: str,
+        context: dict[str, str] | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
         self._configure()
         resource_type = "image" if content_type.startswith("image/") else "raw"
         return cloudinary.uploader.upload(
             str(file_path), public_id=public_id, resource_type=resource_type,
+            context=context or {}, tags=tags or [],
             overwrite=False, invalidate=True,
         )
 

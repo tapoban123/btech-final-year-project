@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DocumentUploadResponse(BaseModel):
@@ -35,3 +35,18 @@ class DocumentMetadata(BaseModel):
 
 class DocumentsResponse(BaseModel):
     documents: list[DocumentMetadata]
+
+
+class DocumentSearchRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=4000)
+
+
+class DocumentSearchResult(BaseModel):
+    document_id: str
+    filename: str
+    cloudinary_url: str | None = None
+
+
+class DocumentSearchResponse(BaseModel):
+    query: str
+    documents: list[DocumentSearchResult]
