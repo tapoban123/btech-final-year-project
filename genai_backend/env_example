@@ -7,6 +7,9 @@ UPLOAD_DIR=./storage/uploads
 MAX_PDF_SIZE_MB=25
 MAX_IMAGE_SIZE_MB=10
 
+# Temporary user identity until authentication is added
+DUMMY_USER_ID=local-test-user
+
 # Cloudinary (use CLOUDINARY_URL instead if preferred)
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=

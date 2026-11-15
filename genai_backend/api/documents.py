@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 MAX_PDF_SIZE = int(os.getenv("MAX_PDF_SIZE_MB", "25")) * 1024 * 1024
 MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
 IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+USER_ID = os.getenv("DUMMY_USER_ID", "local-test-user")
 
 
 def _canonical_cloudinary_id(result: dict, expected_id: str) -> str:
@@ -173,6 +174,7 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
         metadata = {
             "id": document_id,
             "document_id": document_id,
+            "user_id": USER_ID,
             "collection_id": collection_id,
             "original_filename": Path(filename).name,
             "stored_filename": None,
@@ -186,6 +188,7 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
         storage.save_metadata(metadata)
         try:
             rag_pipeline.prepare_document(
+                user_id=USER_ID,
                 collection_id=collection_id,
                 document_id=cloudinary_public_id,
                 document_name=Path(filename).name,
@@ -195,7 +198,7 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
         except Exception as exc:
             logger.exception("[RAG] processing failed for document_id=%s", document_id)
             try:
-                rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
+                rag_pipeline.delete_document(user_id=USER_ID, collection_id=collection_id, document_id=document_id)
             except Exception:
                 logger.exception("[RAG] cleanup failed for document_id=%s", document_id)
             try:
@@ -328,6 +331,7 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
         cloudinary_public_id = _canonical_cloudinary_id(cloudinary_result, document_id)
         metadata = {
             "id": document_id, "document_id": document_id, "collection_id": collection_id,
+            "user_id": USER_ID,
             "original_filename": filename, "stored_filename": None,
             "content_type": content_type, "size_bytes": size_bytes, "status": "uploaded",
             "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
@@ -336,13 +340,13 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
         }
         storage.save_metadata(metadata)
         try:
-            rag_pipeline.prepare_document(collection_id=collection_id, document_id=cloudinary_public_id,
+            rag_pipeline.prepare_document(user_id=USER_ID, collection_id=collection_id, document_id=cloudinary_public_id,
                                           document_name=filename, file_path=temporary_path,
                                           content_type=content_type)
         except Exception as exc:
             logger.exception("[RAG] image processing failed for document_id=%s", document_id)
             try:
-                rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
+                rag_pipeline.delete_document(user_id=USER_ID, collection_id=collection_id, document_id=document_id)
             except Exception:
                 logger.exception("[RAG] image cleanup failed for document_id=%s", document_id)
             try:
@@ -379,7 +383,7 @@ def query_documents(request: DocumentQueryRequest) -> MultiDocumentQueryResponse
     if not storage.collection_exists(request.collection_id):
         raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
     try:
-        result = rag_pipeline.ask(collection_id=request.collection_id, query=request.query)
+        result = rag_pipeline.ask(user_id=USER_ID, collection_id=request.collection_id, query=request.query)
     except RuntimeError as exc:
         raise _error("RAG_NOT_CONFIGURED", str(exc), 503) from exc
     except Exception as exc:
@@ -410,7 +414,7 @@ def delete_collection_document(collection_id: str, document_id: str) -> dict[str
     if record is None:
         raise _error("DOCUMENT_NOT_FOUND", "The requested document does not exist in this collection", 404)
     try:
-        rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
+        rag_pipeline.delete_document(user_id=USER_ID, collection_id=collection_id, document_id=document_id)
         if record.get("cloudinary_public_id"):
             cloudinary_storage.delete(
                 public_id=record["cloudinary_public_id"],
@@ -429,7 +433,7 @@ def delete_collection(collection_id: str) -> dict[str, str]:
     if not records:
         raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
     try:
-        rag_pipeline.delete_collection(collection_id)
+        rag_pipeline.delete_collection(user_id=USER_ID, collection_id=collection_id)
         for record in records:
             if record.get("cloudinary_public_id"):
                 cloudinary_storage.delete(
