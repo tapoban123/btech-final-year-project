@@ -284,6 +284,36 @@ class PDFRAGPipeline:
         ]
         return {"retrieved": retrieved}
 
+    def search_document_ids(self, *, user_id: str, query: str) -> list[str]:
+        """Search 100 chunks and return unique document IDs in rank order."""
+        query = query.strip()
+        if not query:
+            raise ValueError("A search query is required")
+        logger.info("[SEARCH] embedding query user_id=%s query_length=%d", user_id, len(query))
+        pinecone = self._pinecone()
+        embeddings = pinecone.inference.embed(
+            model=self.embedding_model,
+            inputs=[query],
+            parameters={"input_type": "query", "truncate": "END"},
+        )
+        result = self._index(pinecone).query(
+            namespace=self._user_namespace(user_id),
+            vector=embeddings.data[0].values,
+            top_k=100,
+            include_metadata=True,
+        )
+        logger.info("[SEARCH] Pinecone returned %d chunk matches", len(result.matches))
+        document_ids: list[str] = []
+        seen: set[str] = set()
+        for match in result.matches:
+            metadata = match.metadata if hasattr(match, "metadata") else match.get("metadata", {})
+            document_id = str((metadata or {}).get("document_id", "")).strip()
+            if document_id and document_id not in seen:
+                seen.add(document_id)
+                document_ids.append(document_id)
+        logger.info("[SEARCH] unique ranked document_ids=%r", document_ids)
+        return document_ids
+
     def lmm_call(self, state: RAGState) -> dict[str, Any]:
         context = "\n\n".join(
             f"[{item['document_name']}, page {item['page']}]\n{item['text']}" for item in state["retrieved"]
