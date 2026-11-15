@@ -1,56 +1,98 @@
-import json
 import os
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 
 class DocumentStorage:
-    """Stores generated PDF files and collection/document metadata."""
+    """Stores temporary upload files and document metadata in Supabase."""
 
     def __init__(self, upload_dir: str | None = None) -> None:
         self.upload_dir = Path(upload_dir or os.getenv("UPLOAD_DIR", "./storage/uploads"))
         self.upload_dir.mkdir(parents=True, exist_ok=True)
-        self.metadata_path = self.upload_dir / "documents.json"
+        self.supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+        self.supabase_key = (
+            os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+            or os.getenv("SUPABASE_KEY", "").strip()
+        )
+
+    def _headers(self) -> dict[str, str]:
+        if not self.supabase_url or not self.supabase_key:
+            raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured")
+        return {
+            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {self.supabase_key}",
+            "Content-Type": "application/json",
+        }
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        try:
+            response = httpx.request(
+                method, f"{self.supabase_url}/rest/v1/{path}",
+                headers=self._headers(), timeout=15, **kwargs,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500]
+            raise RuntimeError(f"Supabase request failed ({exc.response.status_code}): {detail}") from exc
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"Supabase request failed: {exc}") from exc
+        if not response.content:
+            return None
+        return response.json()
 
     def save_metadata(self, metadata: dict[str, Any]) -> None:
-        records = self.list_metadata()
-        records.append(metadata)
-        self.metadata_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
+        row = {
+            "id": metadata["id"],
+            "user_id": metadata["user_id"],
+            "filename": metadata["original_filename"],
+            "mime_type": metadata["content_type"],
+            "file_size": metadata["size_bytes"],
+            "cloudinary_asset_id": metadata.get("cloudinary_asset_id"),
+            "cloudinary_public_id": metadata.get("cloudinary_public_id"),
+            "cloudinary_resource_type": metadata.get("cloudinary_resource_type"),
+            "status": metadata.get("status", "processing"),
+            "error_message": metadata.get("error_message"),
+        }
+        self._request("POST", "documents", params={"select": "id"}, json=row)
 
-    def collection_exists(self, collection_id: str) -> bool:
-        return any(item.get("collection_id") == collection_id for item in self.list_metadata())
+    def update_metadata(self, document_id: str, *, status: str, error_message: str | None = None) -> None:
+        self._request(
+            "PATCH", "documents", params={"id": f"eq.{document_id}"},
+            json={"status": status, "error_message": error_message},
+        )
 
-    def list_collection_metadata(self, collection_id: str) -> list[dict[str, Any]]:
-        return [item for item in self.list_metadata() if item.get("collection_id") == collection_id]
+    def list_metadata(self, user_id: str) -> list[dict[str, Any]]:
+        rows = self._request("GET", "documents", params={"select": "*", "user_id": f"eq.{user_id}", "order": "created_at.asc"})
+        return [self._to_metadata(row) for row in rows or []]
 
-    def delete_document_metadata(self, document_id: str) -> dict[str, Any] | None:
-        records = self.list_metadata()
-        removed = next((item for item in records if item.get("id") == document_id), None)
-        if removed is not None:
-            records = [item for item in records if item.get("id") != document_id]
-            self.metadata_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
-        return removed
+    def get_metadata(self, document_id: str, user_id: str) -> dict[str, Any] | None:
+        rows = self._request("GET", "documents", params={"select": "*", "id": f"eq.{document_id}", "user_id": f"eq.{user_id}"})
+        return self._to_metadata(rows[0]) if rows else None
 
-    def delete_collection_metadata(self, collection_id: str) -> list[dict[str, Any]]:
-        records = self.list_metadata()
-        removed = [item for item in records if item.get("collection_id") == collection_id]
-        if removed:
-            remaining = [item for item in records if item.get("collection_id") != collection_id]
-            self.metadata_path.write_text(json.dumps(remaining, indent=2), encoding="utf-8")
-        return removed
+    def delete_document_metadata(self, document_id: str, user_id: str) -> dict[str, Any] | None:
+        record = self.get_metadata(document_id, user_id)
+        if record:
+            self._request("DELETE", "documents", params={"id": f"eq.{document_id}", "user_id": f"eq.{user_id}"})
+        return record
 
-    def list_metadata(self) -> list[dict[str, Any]]:
-        if not self.metadata_path.exists():
-            return []
-        try:
-            value = json.loads(self.metadata_path.read_text(encoding="utf-8"))
-            return value if isinstance(value, list) else []
-        except json.JSONDecodeError:
-            return []
+    @staticmethod
+    def _to_metadata(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": row["id"], "document_id": row["id"], "user_id": row.get("user_id"),
+            "original_filename": row.get("filename", ""),
+            "content_type": row.get("mime_type", ""), "size_bytes": row.get("file_size", 0),
+            "status": row.get("status", ""), "created_at": row.get("created_at"),
+            "cloudinary_public_id": row.get("cloudinary_public_id"),
+            "cloudinary_asset_id": row.get("cloudinary_asset_id"),
+            "cloudinary_resource_type": row.get("cloudinary_resource_type"),
+            "error_message": row.get("error_message"),
+        }
 
     def document_path(self, document_id: str, stored_filename: str | None = None) -> Path:
         """Return a stored document path; IDs and filenames are never trusted blindly."""
-        if not document_id.startswith("doc_") or "/" in document_id or "\\" in document_id:
+        if "/" in document_id or "\\" in document_id:
             raise ValueError("Invalid document ID")
         if stored_filename:
             candidate = Path(stored_filename).name

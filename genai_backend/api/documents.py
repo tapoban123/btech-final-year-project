@@ -1,20 +1,19 @@
 import os
 import logging
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from models.document import (
-    CollectionDocumentResponse,
-    CollectionDocumentsResponse,
+    DocumentsResponse,
+    DocumentMetadata,
     DocumentBatchUploadResponse,
     DocumentUploadResponse,
 )
-from models.rag import DocumentQueryRequest, DocumentQueryResponse, MultiDocumentQueryResponse
+from models.rag import DocumentQueryRequest, MultiDocumentQueryResponse
 from services.document_storage import DocumentStorage
 from services.cloudinary_storage import CloudinaryStorage
 from services.rag_pipeline import rag_pipeline
@@ -58,10 +57,6 @@ def _error(code: str, message: str, http_status: int) -> HTTPException:
                         "type": "object",
                         "required": ["files"],
                         "properties": {
-                            "collection_id": {
-                                "type": "string",
-                                "description": "Existing collection to append to; omit to create one.",
-                            },
                             "files": {
                                 "type": "array",
                                 "items": {"type": "string", "format": "binary"},
@@ -74,7 +69,6 @@ def _error(code: str, message: str, http_status: int) -> HTTPException:
     },
 )
 async def upload_documents(
-    collection_id: str | None = Form(None),
     files: List[UploadFile] = File(
         ...,
         description="One or more PDF files. Select multiple files using the file picker.",
@@ -82,17 +76,12 @@ async def upload_documents(
 ) -> DocumentBatchUploadResponse:
     if not files:
         raise _error("NO_FILES", "At least one PDF file is required", 400)
-    requested_collection_id = collection_id
-    collection_id = collection_id or f"collection_{uuid4().hex}"
-    if requested_collection_id and not storage.collection_exists(collection_id):
-        raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
     results: list[DocumentUploadResponse] = []
     for file in files:
-        results.append(await _upload_document(file, collection_id))
+        results.append(await _upload_document(file))
 
     successful = sum(result.status in {"uploaded", "completed"} for result in results)
     return DocumentBatchUploadResponse(
-        collection_id=collection_id,
         total_files=len(results),
         successful=successful,
         failed=len(results) - successful,
@@ -100,11 +89,11 @@ async def upload_documents(
     )
 
 
-async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUploadResponse:
+async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
     filename = file.filename or ""
     logger.info("[UPLOAD] endpoint hit: filename=%r content_type=%r", filename, file.content_type)
     if (file.content_type or "") in IMAGE_TYPES or Path(filename).suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
-        return await _upload_image(file, collection_id)
+        return await _upload_image(file)
     if not filename.lower().endswith(".pdf"):
         return DocumentUploadResponse(
             filename=filename,
@@ -122,7 +111,7 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
             message="The uploaded file must have PDF content type",
         )
 
-    document_id = f"doc_{uuid4().hex}"
+    document_id = str(uuid4())
     temporary_path: Path | None = None
     size_bytes = 0
 
@@ -175,21 +164,19 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
             "id": document_id,
             "document_id": document_id,
             "user_id": USER_ID,
-            "collection_id": collection_id,
             "original_filename": Path(filename).name,
             "stored_filename": None,
             "content_type": "application/pdf",
             "size_bytes": size_bytes,
-            "status": "uploaded",
-            "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
+            "status": "processing",
             "cloudinary_public_id": cloudinary_public_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "cloudinary_asset_id": cloudinary_result.get("asset_id"),
+            "cloudinary_resource_type": cloudinary_result.get("resource_type", "raw"),
         }
         storage.save_metadata(metadata)
         try:
             rag_pipeline.prepare_document(
                 user_id=USER_ID,
-                collection_id=collection_id,
                 document_id=cloudinary_public_id,
                 document_name=Path(filename).name,
                 file_path=temporary_path,
@@ -198,32 +185,30 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
         except Exception as exc:
             logger.exception("[RAG] processing failed for document_id=%s", document_id)
             try:
-                rag_pipeline.delete_document(user_id=USER_ID, collection_id=collection_id, document_id=document_id)
+                rag_pipeline.delete_document(user_id=USER_ID, document_id=document_id)
             except Exception:
                 logger.exception("[RAG] cleanup failed for document_id=%s", document_id)
             try:
                 cloudinary_storage.delete(public_id=cloudinary_public_id, content_type="application/pdf")
             except Exception:
                 logger.exception("[Cloudinary] cleanup failed for document_id=%s", document_id)
-            storage.delete_document_metadata(document_id)
+            storage.update_metadata(document_id, status="failed", error_message=str(exc))
             return DocumentUploadResponse(
-                id=document_id, document_id=document_id, collection_id=collection_id,
+                id=document_id, document_id=document_id,
                 filename=Path(filename).name, content_type="application/pdf",
                 size_bytes=size_bytes, status="failed",
                 message=f"Could not process the PDF: {exc}",
-                cloudinary_url=metadata.get("cloudinary_url"),
                 cloudinary_public_id=metadata.get("cloudinary_public_id"),
             )
+        storage.update_metadata(document_id, status="completed")
         return DocumentUploadResponse(
             id=document_id,
             document_id=document_id,
-            collection_id=collection_id,
             filename=Path(filename).name,
             content_type="application/pdf",
             size_bytes=size_bytes,
             status="completed",
             message="Document uploaded and indexed successfully",
-            cloudinary_url=metadata["cloudinary_url"],
             cloudinary_public_id=metadata["cloudinary_public_id"],
         )
     except OSError as exc:
@@ -262,10 +247,6 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
                         "type": "object",
                         "required": ["files"],
                         "properties": {
-                            "collection_id": {
-                                "type": "string",
-                                "description": "Existing collection to append to; omit to create one.",
-                            },
                             "files": {
                                 "type": "array",
                                 "items": {"type": "string", "format": "binary"},
@@ -279,19 +260,13 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
     },
 )
 async def upload_images(
-    collection_id: str | None = Form(None),
     files: List[UploadFile] = File(..., description="One or more PNG, JPEG, or WebP images."),
 ) -> DocumentBatchUploadResponse:
-    requested_collection_id = collection_id
-    collection_id = collection_id or f"collection_{uuid4().hex}"
-    if requested_collection_id and not storage.collection_exists(collection_id):
-        raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
     if not files:
         raise _error("NO_FILES", "At least one image file is required", 400)
-    results = [await _upload_image(file, collection_id) for file in files]
+    results = [await _upload_image(file) for file in files]
     successful = sum(result.status in {"uploaded", "completed"} for result in results)
     return DocumentBatchUploadResponse(
-        collection_id=collection_id,
         total_files=len(results),
         successful=successful,
         failed=len(results) - successful,
@@ -299,13 +274,13 @@ async def upload_images(
     )
 
 
-async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadResponse:
+async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
     filename = Path(file.filename or "").name
     content_type = file.content_type or ""
     if content_type not in IMAGE_TYPES:
         return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=0,
                                       status="failed", message="Only PNG, JPEG, and WebP images are supported")
-    document_id = f"doc_{uuid4().hex}"
+    document_id = str(uuid4())
     temporary_path: Path | None = None
     size_bytes = 0
     try:
@@ -330,39 +305,38 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
         )
         cloudinary_public_id = _canonical_cloudinary_id(cloudinary_result, document_id)
         metadata = {
-            "id": document_id, "document_id": document_id, "collection_id": collection_id,
+            "id": document_id, "document_id": document_id,
             "user_id": USER_ID,
             "original_filename": filename, "stored_filename": None,
-            "content_type": content_type, "size_bytes": size_bytes, "status": "uploaded",
-            "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
+            "content_type": content_type, "size_bytes": size_bytes, "status": "processing",
             "cloudinary_public_id": cloudinary_public_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "cloudinary_asset_id": cloudinary_result.get("asset_id"),
+            "cloudinary_resource_type": cloudinary_result.get("resource_type", "image"),
         }
         storage.save_metadata(metadata)
         try:
-            rag_pipeline.prepare_document(user_id=USER_ID, collection_id=collection_id, document_id=cloudinary_public_id,
+            rag_pipeline.prepare_document(user_id=USER_ID, document_id=cloudinary_public_id,
                                           document_name=filename, file_path=temporary_path,
                                           content_type=content_type)
         except Exception as exc:
             logger.exception("[RAG] image processing failed for document_id=%s", document_id)
             try:
-                rag_pipeline.delete_document(user_id=USER_ID, collection_id=collection_id, document_id=document_id)
+                rag_pipeline.delete_document(user_id=USER_ID, document_id=document_id)
             except Exception:
                 logger.exception("[RAG] image cleanup failed for document_id=%s", document_id)
             try:
                 cloudinary_storage.delete(public_id=cloudinary_public_id, content_type=content_type)
             except Exception:
                 logger.exception("[Cloudinary] image cleanup failed for document_id=%s", document_id)
-            storage.delete_document_metadata(document_id)
-            return DocumentUploadResponse(id=document_id, document_id=document_id, collection_id=collection_id,
+            storage.update_metadata(document_id, status="failed", error_message=str(exc))
+            return DocumentUploadResponse(id=document_id, document_id=document_id,
                                           filename=filename, content_type=content_type, size_bytes=size_bytes,
                                           status="failed", message=f"Could not process the image: {exc}",
-                                          cloudinary_url=metadata.get("cloudinary_url"),
                                           cloudinary_public_id=metadata.get("cloudinary_public_id"))
-        return DocumentUploadResponse(id=document_id, document_id=document_id, collection_id=collection_id,
+        storage.update_metadata(document_id, status="completed")
+        return DocumentUploadResponse(id=document_id, document_id=document_id,
                                       filename=filename, content_type=content_type, size_bytes=size_bytes,
                                       status="completed", message="Document uploaded and indexed successfully",
-                                      cloudinary_url=metadata["cloudinary_url"],
                                       cloudinary_public_id=metadata["cloudinary_public_id"])
     except OSError as exc:
         logger.exception("[UPLOAD] image storage failed for filename=%r", filename)
@@ -374,74 +348,38 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
         await file.close()
 
 
-@router.post(
-    "/documents/query",
-    response_model=MultiDocumentQueryResponse,
-    status_code=status.HTTP_200_OK,
-)
+@router.post("/documents/query", response_model=MultiDocumentQueryResponse, status_code=status.HTTP_200_OK)
 def query_documents(request: DocumentQueryRequest) -> MultiDocumentQueryResponse:
-    if not storage.collection_exists(request.collection_id):
-        raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
     try:
-        result = rag_pipeline.ask(user_id=USER_ID, collection_id=request.collection_id, query=request.query)
+        result = rag_pipeline.ask(user_id=USER_ID, query=request.query)
     except RuntimeError as exc:
         raise _error("RAG_NOT_CONFIGURED", str(exc), 503) from exc
     except Exception as exc:
-        logger.exception("[RAG] query failed for collection_id=%s", request.collection_id)
+        logger.exception("[RAG] query failed")
         raise _error("RAG_QUERY_FAILED", "Could not answer the question", 500) from exc
-    return MultiDocumentQueryResponse(collection_id=request.collection_id, **result)
+    return MultiDocumentQueryResponse(**result)
 
 
-@router.get("/collections/{collection_id}/documents", response_model=CollectionDocumentsResponse)
-def list_collection_documents(collection_id: str) -> CollectionDocumentsResponse:
-    records = storage.list_collection_metadata(collection_id)
-    if not records:
-        raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
-    return CollectionDocumentsResponse(
-        collection_id=collection_id,
-        documents=[CollectionDocumentResponse(
-            document_id=item["id"], collection_id=collection_id,
-            filename=item["original_filename"], size_bytes=item["size_bytes"],
-            status=item["status"], created_at=item["created_at"],
-        ) for item in records],
-    )
+@router.get("/documents", response_model=DocumentsResponse)
+def list_documents() -> DocumentsResponse:
+    return DocumentsResponse(documents=[DocumentMetadata(
+        document_id=item["id"], filename=item["original_filename"], size_bytes=item["size_bytes"],
+        status=item["status"], created_at=item["created_at"],
+    ) for item in storage.list_metadata(USER_ID)])
 
 
-@router.delete("/collections/{collection_id}/documents/{document_id}")
-def delete_collection_document(collection_id: str, document_id: str) -> dict[str, str]:
-    record = next((item for item in storage.list_collection_metadata(collection_id)
-                   if item.get("id") == document_id), None)
+@router.delete("/documents/{document_id}")
+def delete_document(document_id: str) -> dict[str, str]:
+    record = storage.get_metadata(document_id, USER_ID)
     if record is None:
-        raise _error("DOCUMENT_NOT_FOUND", "The requested document does not exist in this collection", 404)
+        raise _error("DOCUMENT_NOT_FOUND", "The requested document does not exist", 404)
     try:
-        rag_pipeline.delete_document(user_id=USER_ID, collection_id=collection_id, document_id=document_id)
+        rag_pipeline.delete_document(user_id=USER_ID, document_id=document_id)
         if record.get("cloudinary_public_id"):
-            cloudinary_storage.delete(
-                public_id=record["cloudinary_public_id"],
-                content_type=record.get("content_type", "application/pdf"),
-            )
-        storage.delete_document_metadata(document_id)
+            cloudinary_storage.delete(public_id=record["cloudinary_public_id"],
+                                      content_type=record.get("content_type", "application/pdf"))
+        storage.delete_document_metadata(document_id, USER_ID)
     except Exception as exc:
-        logger.exception("[RAG] document deletion failed for document_id=%s", document_id)
+        logger.exception("[DELETE] document deletion failed for document_id=%s", document_id)
         raise _error("DELETE_FAILED", "Could not delete the document", 500) from exc
-    return {"collection_id": collection_id, "document_id": document_id, "status": "deleted"}
-
-
-@router.delete("/collections/{collection_id}")
-def delete_collection(collection_id: str) -> dict[str, str]:
-    records = storage.list_collection_metadata(collection_id)
-    if not records:
-        raise _error("COLLECTION_NOT_FOUND", "The requested collection does not exist", 404)
-    try:
-        rag_pipeline.delete_collection(user_id=USER_ID, collection_id=collection_id)
-        for record in records:
-            if record.get("cloudinary_public_id"):
-                cloudinary_storage.delete(
-                    public_id=record["cloudinary_public_id"],
-                    content_type=record.get("content_type", "application/pdf"),
-                )
-        storage.delete_collection_metadata(collection_id)
-    except Exception as exc:
-        logger.exception("[RAG] collection deletion failed for collection_id=%s", collection_id)
-        raise _error("DELETE_FAILED", "Could not delete the collection", 500) from exc
-    return {"collection_id": collection_id, "status": "deleted"}
+    return {"document_id": document_id, "status": "deleted"}
