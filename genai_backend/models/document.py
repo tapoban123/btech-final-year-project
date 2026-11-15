@@ -12,6 +12,8 @@ class DocumentUploadResponse(BaseModel):
     size_bytes: int
     status: str
     message: str
+    cloudinary_url: str | None = None
+    cloudinary_public_id: str | None = None
 
 
 class DocumentBatchUploadResponse(BaseModel):
@@ -35,6 +37,8 @@ class DocumentMetadata(BaseModel):
     size_bytes: int
     status: str
     created_at: datetime
+    cloudinary_url: str | None = None
+    cloudinary_public_id: str | None = None
 
 
 class CollectionDocumentResponse(BaseModel):

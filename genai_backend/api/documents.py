@@ -16,10 +16,12 @@ from models.document import (
 )
 from models.rag import DocumentQueryRequest, DocumentQueryResponse, MultiDocumentQueryResponse
 from services.document_storage import DocumentStorage
+from services.cloudinary_storage import CloudinaryStorage
 from services.rag_pipeline import rag_pipeline
 
 router = APIRouter(tags=["documents"])
 storage = DocumentStorage()
+cloudinary_storage = CloudinaryStorage()
 logger = logging.getLogger(__name__)
 MAX_PDF_SIZE = int(os.getenv("MAX_PDF_SIZE_MB", "25")) * 1024 * 1024
 MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
@@ -77,7 +79,7 @@ async def upload_documents(
     for file in files:
         results.append(await _upload_document(file, collection_id))
 
-    successful = sum(result.status == "uploaded" for result in results)
+    successful = sum(result.status in {"uploaded", "completed"} for result in results)
     return DocumentBatchUploadResponse(
         collection_id=collection_id,
         total_files=len(results),
@@ -89,12 +91,9 @@ async def upload_documents(
 
 async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUploadResponse:
     filename = file.filename or ""
-    logger.info(
-        "[UPLOAD] endpoint hit: filename=%r content_type=%r storage_dir=%s",
-        filename,
-        file.content_type,
-        storage.upload_dir.resolve(),
-    )
+    logger.info("[UPLOAD] endpoint hit: filename=%r content_type=%r", filename, file.content_type)
+    if (file.content_type or "") in IMAGE_TYPES or Path(filename).suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+        return await _upload_image(file, collection_id)
     if not filename.lower().endswith(".pdf"):
         return DocumentUploadResponse(
             filename=filename,
@@ -156,21 +155,21 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
                     )
                 temporary.write(chunk)
 
-        final_path = storage.upload_dir / f"{document_id}.pdf"
         logger.info("[UPLOAD] received file: filename=%r size_bytes=%d", filename, size_bytes)
-        logger.info("[UPLOAD] destination storage directory: %s", storage.upload_dir.resolve())
-        logger.info("[UPLOAD] final saved file path: %s", final_path.resolve())
-        temporary_path.replace(final_path)
-        logger.info("[UPLOAD] file saved successfully: %s", final_path.resolve())
+        cloudinary_result = cloudinary_storage.upload(
+            temporary_path, public_id=document_id, content_type="application/pdf"
+        )
         metadata = {
             "id": document_id,
             "document_id": document_id,
             "collection_id": collection_id,
             "original_filename": Path(filename).name,
-            "stored_filename": final_path.name,
+            "stored_filename": None,
             "content_type": "application/pdf",
             "size_bytes": size_bytes,
             "status": "uploaded",
+            "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
+            "cloudinary_public_id": cloudinary_result.get("public_id", document_id),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         storage.save_metadata(metadata)
@@ -179,7 +178,7 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
                 collection_id=collection_id,
                 document_id=document_id,
                 document_name=Path(filename).name,
-                file_path=final_path,
+                file_path=temporary_path,
                 content_type="application/pdf",
             )
         except Exception as exc:
@@ -188,13 +187,18 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
                 rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
             except Exception:
                 logger.exception("[RAG] cleanup failed for document_id=%s", document_id)
-            final_path.unlink(missing_ok=True)
+            try:
+                cloudinary_storage.delete(public_id=document_id, content_type="application/pdf")
+            except Exception:
+                logger.exception("[Cloudinary] cleanup failed for document_id=%s", document_id)
             storage.delete_document_metadata(document_id)
             return DocumentUploadResponse(
                 id=document_id, document_id=document_id, collection_id=collection_id,
                 filename=Path(filename).name, content_type="application/pdf",
                 size_bytes=size_bytes, status="failed",
                 message=f"Could not process the PDF: {exc}",
+                cloudinary_url=metadata.get("cloudinary_url"),
+                cloudinary_public_id=metadata.get("cloudinary_public_id"),
             )
         return DocumentUploadResponse(
             id=document_id,
@@ -203,8 +207,10 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
             filename=Path(filename).name,
             content_type="application/pdf",
             size_bytes=size_bytes,
-            status="uploaded",
-            message="PDF uploaded successfully",
+            status="completed",
+            message="Document uploaded and indexed successfully",
+            cloudinary_url=metadata["cloudinary_url"],
+            cloudinary_public_id=metadata["cloudinary_public_id"],
         )
     except OSError as exc:
         logger.exception("[UPLOAD] storage exception for filename=%r: %s", filename, exc)
@@ -269,7 +275,7 @@ async def upload_images(
     if not files:
         raise _error("NO_FILES", "At least one image file is required", 400)
     results = [await _upload_image(file, collection_id) for file in files]
-    successful = sum(result.status == "uploaded" for result in results)
+    successful = sum(result.status in {"uploaded", "completed"} for result in results)
     return DocumentBatchUploadResponse(
         collection_id=collection_id,
         total_files=len(results),
@@ -288,7 +294,6 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
     document_id = f"doc_{uuid4().hex}"
     temporary_path: Path | None = None
     size_bytes = 0
-    final_path = storage.upload_dir / f"{document_id}{IMAGE_TYPES[content_type]}"
     try:
         with tempfile.NamedTemporaryFile(mode="wb", prefix=f"{document_id}_", suffix=".tmp",
                                          dir=storage.upload_dir, delete=False) as temporary:
@@ -306,17 +311,21 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
         if size_bytes == 0:
             return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=0,
                                           status="failed", message="The image file is empty")
-        temporary_path.replace(final_path)
+        cloudinary_result = cloudinary_storage.upload(
+            temporary_path, public_id=document_id, content_type=content_type
+        )
         metadata = {
             "id": document_id, "document_id": document_id, "collection_id": collection_id,
-            "original_filename": filename, "stored_filename": final_path.name,
+            "original_filename": filename, "stored_filename": None,
             "content_type": content_type, "size_bytes": size_bytes, "status": "uploaded",
+            "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
+            "cloudinary_public_id": cloudinary_result.get("public_id", document_id),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         storage.save_metadata(metadata)
         try:
             rag_pipeline.prepare_document(collection_id=collection_id, document_id=document_id,
-                                          document_name=filename, file_path=final_path,
+                                          document_name=filename, file_path=temporary_path,
                                           content_type=content_type)
         except Exception as exc:
             logger.exception("[RAG] image processing failed for document_id=%s", document_id)
@@ -324,14 +333,21 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
                 rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
             except Exception:
                 logger.exception("[RAG] image cleanup failed for document_id=%s", document_id)
-            final_path.unlink(missing_ok=True)
+            try:
+                cloudinary_storage.delete(public_id=document_id, content_type=content_type)
+            except Exception:
+                logger.exception("[Cloudinary] image cleanup failed for document_id=%s", document_id)
             storage.delete_document_metadata(document_id)
             return DocumentUploadResponse(id=document_id, document_id=document_id, collection_id=collection_id,
                                           filename=filename, content_type=content_type, size_bytes=size_bytes,
-                                          status="failed", message=f"Could not process the image: {exc}")
+                                          status="failed", message=f"Could not process the image: {exc}",
+                                          cloudinary_url=metadata.get("cloudinary_url"),
+                                          cloudinary_public_id=metadata.get("cloudinary_public_id"))
         return DocumentUploadResponse(id=document_id, document_id=document_id, collection_id=collection_id,
                                       filename=filename, content_type=content_type, size_bytes=size_bytes,
-                                      status="uploaded", message="Image analyzed and indexed successfully")
+                                      status="completed", message="Document uploaded and indexed successfully",
+                                      cloudinary_url=metadata["cloudinary_url"],
+                                      cloudinary_public_id=metadata["cloudinary_public_id"])
     except OSError as exc:
         logger.exception("[UPLOAD] image storage failed for filename=%r", filename)
         return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=size_bytes,
@@ -383,7 +399,11 @@ def delete_collection_document(collection_id: str, document_id: str) -> dict[str
         raise _error("DOCUMENT_NOT_FOUND", "The requested document does not exist in this collection", 404)
     try:
         rag_pipeline.delete_document(collection_id=collection_id, document_id=document_id)
-        storage.document_path(document_id, record.get("stored_filename")).unlink(missing_ok=True)
+        if record.get("cloudinary_public_id"):
+            cloudinary_storage.delete(
+                public_id=record["cloudinary_public_id"],
+                content_type=record.get("content_type", "application/pdf"),
+            )
         storage.delete_document_metadata(document_id)
     except Exception as exc:
         logger.exception("[RAG] document deletion failed for document_id=%s", document_id)
@@ -399,7 +419,11 @@ def delete_collection(collection_id: str) -> dict[str, str]:
     try:
         rag_pipeline.delete_collection(collection_id)
         for record in records:
-            storage.document_path(record["id"], record.get("stored_filename")).unlink(missing_ok=True)
+            if record.get("cloudinary_public_id"):
+                cloudinary_storage.delete(
+                    public_id=record["cloudinary_public_id"],
+                    content_type=record.get("content_type", "application/pdf"),
+                )
         storage.delete_collection_metadata(collection_id)
     except Exception as exc:
         logger.exception("[RAG] collection deletion failed for collection_id=%s", collection_id)
