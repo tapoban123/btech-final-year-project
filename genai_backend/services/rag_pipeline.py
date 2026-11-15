@@ -218,6 +218,17 @@ class PDFRAGPipeline:
         return {"chunks": chunks}
 
     def vector_databasing(self, state: RAGState) -> dict[str, Any]:
+        """Embed chunks from the temporary upload and index them by document ID.
+
+        Pinecone vector IDs must be unique, so the Cloudinary/document ID is
+        retained exactly as the prefix and the chunk number is appended.
+        """
+        document_id = state["document_id"].strip()
+        if not document_id:
+            raise ValueError("A canonical document ID is required for indexing")
+        if not state["chunks"]:
+            raise ValueError("The document produced no indexable chunks")
+
         pinecone = self._pinecone()
         index = self._index(pinecone)
         namespace = state["collection_id"]
@@ -230,12 +241,12 @@ class PDFRAGPipeline:
             namespace=namespace,
             vectors=[
                 {
-                    "id": f"{state['document_id']}_{index_number}",
+                    "id": f"{document_id}_{index_number}",
                     "values": embedding.values,
                     "metadata": {
                         "page": chunk["page"],
                         "text": chunk["text"],
-                        "document_id": state["document_id"],
+                        "document_id": document_id,
                         "document_name": state["document_name"],
                     },
                 }
