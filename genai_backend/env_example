@@ -10,6 +10,10 @@ MAX_IMAGE_SIZE_MB=10
 # Temporary user identity until authentication is added
 DUMMY_USER_ID=local-test-user
 
+# Supabase document metadata (server-side key only)
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+
 # Cloudinary (use CLOUDINARY_URL instead if preferred)
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
