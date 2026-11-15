@@ -25,6 +25,7 @@ aiosqlite
 
 # HTTP and asynchronous utilities
 httpx
+cloudinary
 
 # Testing
 pytest
