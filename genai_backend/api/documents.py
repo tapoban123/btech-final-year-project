@@ -28,6 +28,16 @@ MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
 IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 
 
+def _canonical_cloudinary_id(result: dict, expected_id: str) -> str:
+    """Return the ID shared by Cloudinary, metadata, and Pinecone."""
+    public_id = str(result.get("public_id") or expected_id).strip()
+    if public_id != expected_id:
+        raise RuntimeError(
+            f"Cloudinary returned public_id={public_id!r}; expected {expected_id!r}"
+        )
+    return public_id
+
+
 def _error(code: str, message: str, http_status: int) -> HTTPException:
     return HTTPException(
         status_code=http_status,
@@ -159,6 +169,7 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
         cloudinary_result = cloudinary_storage.upload(
             temporary_path, public_id=document_id, content_type="application/pdf"
         )
+        cloudinary_public_id = _canonical_cloudinary_id(cloudinary_result, document_id)
         metadata = {
             "id": document_id,
             "document_id": document_id,
@@ -169,14 +180,14 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
             "size_bytes": size_bytes,
             "status": "uploaded",
             "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
-            "cloudinary_public_id": cloudinary_result.get("public_id", document_id),
+            "cloudinary_public_id": cloudinary_public_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         storage.save_metadata(metadata)
         try:
             rag_pipeline.prepare_document(
                 collection_id=collection_id,
-                document_id=document_id,
+                document_id=cloudinary_public_id,
                 document_name=Path(filename).name,
                 file_path=temporary_path,
                 content_type="application/pdf",
@@ -188,7 +199,7 @@ async def _upload_document(file: UploadFile, collection_id: str) -> DocumentUplo
             except Exception:
                 logger.exception("[RAG] cleanup failed for document_id=%s", document_id)
             try:
-                cloudinary_storage.delete(public_id=document_id, content_type="application/pdf")
+                cloudinary_storage.delete(public_id=cloudinary_public_id, content_type="application/pdf")
             except Exception:
                 logger.exception("[Cloudinary] cleanup failed for document_id=%s", document_id)
             storage.delete_document_metadata(document_id)
@@ -314,17 +325,18 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
         cloudinary_result = cloudinary_storage.upload(
             temporary_path, public_id=document_id, content_type=content_type
         )
+        cloudinary_public_id = _canonical_cloudinary_id(cloudinary_result, document_id)
         metadata = {
             "id": document_id, "document_id": document_id, "collection_id": collection_id,
             "original_filename": filename, "stored_filename": None,
             "content_type": content_type, "size_bytes": size_bytes, "status": "uploaded",
             "cloudinary_url": cloudinary_result.get("secure_url") or cloudinary_result.get("url"),
-            "cloudinary_public_id": cloudinary_result.get("public_id", document_id),
+            "cloudinary_public_id": cloudinary_public_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         storage.save_metadata(metadata)
         try:
-            rag_pipeline.prepare_document(collection_id=collection_id, document_id=document_id,
+            rag_pipeline.prepare_document(collection_id=collection_id, document_id=cloudinary_public_id,
                                           document_name=filename, file_path=temporary_path,
                                           content_type=content_type)
         except Exception as exc:
@@ -334,7 +346,7 @@ async def _upload_image(file: UploadFile, collection_id: str) -> DocumentUploadR
             except Exception:
                 logger.exception("[RAG] image cleanup failed for document_id=%s", document_id)
             try:
-                cloudinary_storage.delete(public_id=document_id, content_type=content_type)
+                cloudinary_storage.delete(public_id=cloudinary_public_id, content_type=content_type)
             except Exception:
                 logger.exception("[Cloudinary] image cleanup failed for document_id=%s", document_id)
             storage.delete_document_metadata(document_id)
