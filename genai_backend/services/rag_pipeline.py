@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class RAGState(TypedDict, total=False):
+    user_id: str
     collection_id: str
     document_id: str
     document_name: str
@@ -36,6 +37,7 @@ class RAGState(TypedDict, total=False):
 
 
 class IngestionState(TypedDict, total=False):
+    user_id: str
     collection_id: str
     document_id: str
     document_name: str
@@ -184,16 +186,18 @@ class PDFRAGPipeline:
 
     def ingestion_embedding(self, state: IngestionState) -> dict[str, Any]:
         return self.vector_databasing({
+            "user_id": state["user_id"],
             "collection_id": state["collection_id"],
             "document_id": state["document_id"],
             "document_name": state["document_name"],
             "chunks": state["chunks"],
         })
 
-    def prepare_document(self, *, collection_id: str, document_id: str, document_name: str,
+    def prepare_document(self, *, user_id: str, collection_id: str, document_id: str, document_name: str,
                          file_path: Path, content_type: str = "application/pdf") -> None:
         """Extract, chunk, embed, and index a PDF or image during document loading."""
         self._ingestion_graph.invoke({
+            "user_id": user_id,
             "collection_id": collection_id,
             "document_id": document_id,
             "document_name": document_name,
@@ -231,7 +235,7 @@ class PDFRAGPipeline:
 
         pinecone = self._pinecone()
         index = self._index(pinecone)
-        namespace = state["collection_id"]
+        namespace = self._user_namespace(state["user_id"])
         embeddings = pinecone.inference.embed(
             model=self.embedding_model,
             inputs=[chunk["text"] for chunk in state["chunks"]],
@@ -246,6 +250,8 @@ class PDFRAGPipeline:
                     "metadata": {
                         "page": chunk["page"],
                         "text": chunk["text"],
+                        "user_id": state["user_id"],
+                        "collection_id": state["collection_id"],
                         "document_id": document_id,
                         "document_name": state["document_name"],
                     },
@@ -266,10 +272,11 @@ class PDFRAGPipeline:
     def retrival(self, state: RAGState) -> dict[str, Any]:
         index = self._index(self._pinecone())
         result = index.query(
-            namespace=state["collection_id"],
+            namespace=self._user_namespace(state["user_id"]),
             vector=state["query_embedding"],
             top_k=5,
             include_metadata=True,
+            filter={"collection_id": {"$eq": state["collection_id"]}},
         )
         retrieved = [
             {
@@ -339,22 +346,38 @@ class PDFRAGPipeline:
             "answer": answer,
             "citations": citations,
         }
-    def ask(self, *, collection_id: str, query: str) -> dict[str, Any]:
+    def _user_namespace(self, user_id: str) -> str:
+        user_id = user_id.strip()
+        if not user_id or any(character in user_id for character in " /\\"):
+            raise ValueError("Invalid user ID for Pinecone namespace")
+        return f"user_{user_id}"
+
+    def ask(self, *, user_id: str, collection_id: str, query: str) -> dict[str, Any]:
         result = self._graph.invoke(
             {
+                "user_id": user_id,
                 "collection_id": collection_id,
                 "query": query.strip(),
             }
         )
         return {"answer": result["answer"], "sources": result["citations"]}
 
-    def delete_document(self, *, collection_id: str, document_id: str) -> None:
+    def delete_document(self, *, user_id: str, collection_id: str, document_id: str) -> None:
         index = self._index(self._pinecone())
-        index.delete(namespace=collection_id, filter={"document_id": document_id})
+        index.delete(
+            namespace=self._user_namespace(user_id),
+            filter={
+                "document_id": {"$eq": document_id},
+                "collection_id": {"$eq": collection_id},
+            },
+        )
 
-    def delete_collection(self, collection_id: str) -> None:
+    def delete_collection(self, *, user_id: str, collection_id: str) -> None:
         index = self._index(self._pinecone())
-        index.delete(namespace=collection_id, delete_all=True)
+        index.delete(
+            namespace=self._user_namespace(user_id),
+            filter={"collection_id": {"$eq": collection_id}},
+        )
 
 
 rag_pipeline = PDFRAGPipeline()
