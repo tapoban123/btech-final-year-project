@@ -56,6 +56,10 @@ venv.bak/
 google-services.json
 GoogleService-Info.plist
 
+# Backend runtime uploads and local metadata
+genai_backend/storage/uploads/*
+!genai_backend/storage/uploads/.gitkeep
+
 # ------------------------------------------------------------------------------
 # 6. Logs & Diagnostics
 # ------------------------------------------------------------------------------
