@@ -31,6 +31,8 @@ class DocumentMetadata(BaseModel):
     size_bytes: int
     status: str
     created_at: datetime
+    cloudinary_url: str | None = None
+    mime_type: str | None = None
 
 
 class DocumentsResponse(BaseModel):

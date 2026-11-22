@@ -44,7 +44,7 @@ sync:
 	git push origin main
 
 push:
-	git push origin main
+	git push origin ${b}
 
 pull:
 	git pull origin main
