@@ -39,6 +39,7 @@ class IngestionState(TypedDict, total=False):
     user_id: str
     document_id: str
     document_name: str
+    file_bytes: bytes
     file_path: str
     content_type: str
     pages: list[dict[str, Any]]
@@ -148,7 +149,13 @@ class PDFRAGPipeline:
 
     def extract_pdf(self, state: IngestionState) -> dict[str, Any]:
         pages: list[dict[str, Any]] = []
-        with fitz.open(state["file_path"]) as document:
+        file_bytes = state.get("file_bytes")
+        doc_context = (
+            fitz.open(stream=file_bytes, filetype="pdf")
+            if file_bytes is not None
+            else fitz.open(state["file_path"])
+        )
+        with doc_context as document:
             for page_number, page in enumerate(document, start=1):
                 text = page.get_text("text").strip()
                 if text:
@@ -158,7 +165,11 @@ class PDFRAGPipeline:
         return {"pages": pages}
 
     def extract_image(self, state: IngestionState) -> dict[str, Any]:
-        image_bytes = Path(state["file_path"]).read_bytes()
+        image_bytes = state.get("file_bytes")
+        if image_bytes is None and state.get("file_path"):
+            image_bytes = Path(state["file_path"]).read_bytes()
+        if not image_bytes:
+            raise ValueError("No image data provided for extraction")
         prompt = (
             "Analyze this image for retrieval-augmented generation. Produce detailed factual text "
             "covering all visible text (preserve exact wording where readable), entities, labels, "
@@ -190,14 +201,34 @@ class PDFRAGPipeline:
             "chunks": state["chunks"],
         })
 
-    def prepare_document(self, *, user_id: str, document_id: str, document_name: str,
-                         file_path: Path, content_type: str = "application/pdf") -> None:
-        """Extract, chunk, embed, and index a PDF or image during document loading."""
+    def prepare_document(
+        self,
+        *,
+        user_id: str,
+        document_id: str,
+        document_name: str,
+        file_data: bytes | Path | str | None = None,
+        file_path: Path | str | None = None,
+        content_type: str = "application/pdf",
+    ) -> None:
+        """Extract, chunk, embed, and index a PDF or image in-memory or from file during document loading."""
+        file_bytes: bytes | None = None
+        target_path: str = ""
+        if isinstance(file_data, bytes):
+            file_bytes = file_data
+        elif file_data is not None:
+            target_path = str(file_data)
+            file_bytes = Path(file_data).read_bytes()
+        elif file_path is not None:
+            target_path = str(file_path)
+            file_bytes = Path(file_path).read_bytes()
+
         self._ingestion_graph.invoke({
             "user_id": user_id,
             "document_id": document_id,
             "document_name": document_name,
-            "file_path": str(file_path),
+            "file_bytes": file_bytes,
+            "file_path": target_path,
             "content_type": content_type,
         })
 
