@@ -284,8 +284,8 @@ class PDFRAGPipeline:
         ]
         return {"retrieved": retrieved}
 
-    def search_document_ids(self, *, user_id: str, query: str) -> list[str]:
-        """Search 100 chunks and return unique document IDs in rank order."""
+    def search_documents(self, *, user_id: str, query: str) -> list[dict[str, Any]]:
+        """Search 100 chunks and return unique document matches with peak similarity scores in rank order."""
         query = query.strip()
         if not query:
             raise ValueError("A search query is required")
@@ -303,16 +303,21 @@ class PDFRAGPipeline:
             include_metadata=True,
         )
         logger.info("[SEARCH] Pinecone returned %d chunk matches", len(result.matches))
-        document_ids: list[str] = []
+        matches: list[dict[str, Any]] = []
         seen: set[str] = set()
         for match in result.matches:
             metadata = match.metadata if hasattr(match, "metadata") else match.get("metadata", {})
             document_id = str((metadata or {}).get("document_id", "")).strip()
+            score = float(match.score) if hasattr(match, "score") and match.score is not None else 0.0
             if document_id and document_id not in seen:
                 seen.add(document_id)
-                document_ids.append(document_id)
-        logger.info("[SEARCH] unique ranked document_ids=%r", document_ids)
-        return document_ids
+                matches.append({"document_id": document_id, "score": score})
+        logger.info("[SEARCH] unique ranked documents=%r", matches)
+        return matches
+
+    def search_document_ids(self, *, user_id: str, query: str) -> list[str]:
+        """Search 100 chunks and return unique document IDs in rank order."""
+        return [item["document_id"] for item in self.search_documents(user_id=user_id, query=query)]
 
     def lmm_call(self, state: RAGState) -> dict[str, Any]:
         context = "\n\n".join(

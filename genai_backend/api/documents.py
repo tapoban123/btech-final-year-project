@@ -365,6 +365,14 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
         logger.exception("[UPLOAD] image storage failed for filename=%r", filename)
         return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=size_bytes,
                                       status="failed", message=f"Could not store the image: {exc}")
+    except RuntimeError as exc:
+        logger.exception("[UPLOAD] image configuration error for filename=%r: %s", filename, exc)
+        return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=size_bytes,
+                                      status="failed", message=str(exc))
+    except Exception as exc:
+        logger.exception("[UPLOAD] unexpected image processing failed for filename=%r: %s", filename, exc)
+        return DocumentUploadResponse(filename=filename, content_type=content_type, size_bytes=size_bytes,
+                                      status="failed", message=f"Could not process the image: {exc}")
     finally:
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink(missing_ok=True)
@@ -388,7 +396,8 @@ def search_documents(request: DocumentSearchRequest) -> DocumentSearchResponse:
     """Return unique, user-owned documents matching a semantic query."""
     logger.info("[SEARCH] endpoint received query_length=%d user_id=%s", len(request.query), USER_ID)
     try:
-        ranked_ids = rag_pipeline.search_document_ids(user_id=USER_ID, query=request.query)
+        ranked_matches = rag_pipeline.search_documents(user_id=USER_ID, query=request.query)
+        ranked_ids = [item["document_id"] for item in ranked_matches]
         logger.info("[SEARCH] fetching Supabase records for ranked_ids=%r", ranked_ids)
         records = storage.get_metadata_for_ids(ranked_ids, USER_ID)
         logger.info("[SEARCH] Supabase returned %d records", len(records))
@@ -399,6 +408,7 @@ def search_documents(request: DocumentSearchRequest) -> DocumentSearchResponse:
         raise _error("DOCUMENT_SEARCH_FAILED", "Could not search documents", 500) from exc
 
     records_by_id = {record["document_id"]: record for record in records}
+    scores_by_id = {item["document_id"]: item["score"] for item in ranked_matches}
     return DocumentSearchResponse(
         query=request.query,
         documents=[
@@ -406,6 +416,7 @@ def search_documents(request: DocumentSearchRequest) -> DocumentSearchResponse:
                 document_id=document_id,
                 filename=records_by_id[document_id]["original_filename"],
                 cloudinary_url=records_by_id[document_id].get("cloudinary_url"),
+                score=scores_by_id.get(document_id),
             )
             for document_id in ranked_ids
             if document_id in records_by_id
@@ -415,15 +426,28 @@ def search_documents(request: DocumentSearchRequest) -> DocumentSearchResponse:
 
 @router.get("/documents", response_model=DocumentsResponse)
 def list_documents() -> DocumentsResponse:
-    return DocumentsResponse(documents=[DocumentMetadata(
-        document_id=item["id"], filename=item["original_filename"], size_bytes=item["size_bytes"],
-        status=item["status"], created_at=item["created_at"],
-    ) for item in storage.list_metadata(USER_ID)])
+    try:
+        return DocumentsResponse(documents=[DocumentMetadata(
+            document_id=item["id"], filename=item["original_filename"], size_bytes=item["size_bytes"],
+            status=item["status"], created_at=item["created_at"],
+        ) for item in storage.list_metadata(USER_ID)])
+    except RuntimeError as exc:
+        raise _error("STORAGE_NOT_CONFIGURED", str(exc), 503) from exc
+    except Exception as exc:
+        logger.exception("[STORAGE] list documents failed")
+        raise _error("LIST_DOCUMENTS_FAILED", "Could not fetch document list", 500) from exc
 
 
 @router.delete("/documents/{document_id}")
 def delete_document(document_id: str) -> dict[str, str]:
-    record = storage.get_metadata(document_id, USER_ID)
+    try:
+        record = storage.get_metadata(document_id, USER_ID)
+    except RuntimeError as exc:
+        raise _error("STORAGE_NOT_CONFIGURED", str(exc), 503) from exc
+    except Exception as exc:
+        logger.exception("[STORAGE] get metadata failed for document_id=%s", document_id)
+        raise _error("DOCUMENT_FETCH_FAILED", "Could not fetch document metadata", 500) from exc
+
     if record is None:
         raise _error("DOCUMENT_NOT_FOUND", "The requested document does not exist", 404)
     try:
