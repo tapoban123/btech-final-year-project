@@ -130,6 +130,7 @@ class DocumentStorage:
         return {
             "id": row["id"], "document_id": row["id"], "user_id": row.get("user_id"),
             "original_filename": row.get("filename", ""),
+            "mime_type": row.get("mime_type", ""),
             "content_type": row.get("mime_type", ""), "size_bytes": row.get("file_size", 0),
             "status": row.get("status", ""), "created_at": row.get("created_at"),
             "cloudinary_public_id": row.get("cloudinary_public_id"),
