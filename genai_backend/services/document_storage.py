@@ -7,6 +7,8 @@ from typing import Any
 import httpx
 
 
+import tempfile
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,8 +16,11 @@ class DocumentStorage:
     """Stores temporary upload files and document metadata in Supabase."""
 
     def __init__(self, upload_dir: str | None = None) -> None:
-        self.upload_dir = Path(upload_dir or os.getenv("UPLOAD_DIR", "./storage/uploads"))
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.upload_dir = Path(upload_dir or os.getenv("UPLOAD_DIR", tempfile.gettempdir()))
+        try:
+            self.upload_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
         self.supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
         self.supabase_key = (
             os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()

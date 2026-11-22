@@ -21,6 +21,27 @@ class DocumentBatchUploadResponse(BaseModel):
     results: list[DocumentUploadResponse]
 
 
+MULTI_FILE_UPLOAD_OPENAPI_EXTRA = {
+    "requestBody": {
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "required": ["files"],
+                    "properties": {
+                        "files": {
+                            "type": "array",
+                            "items": {"type": "string", "format": "binary"},
+                            "description": "One or more PDF or image files (PNG, JPEG, WebP).",
+                        },
+                    },
+                }
+            }
+        }
+    }
+}
+
+
 class ImageBatchUploadResponse(DocumentBatchUploadResponse):
     pass
 

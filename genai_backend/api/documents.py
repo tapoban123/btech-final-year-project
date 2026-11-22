@@ -1,6 +1,5 @@
 import os
 import logging
-import tempfile
 from pathlib import Path
 from typing import List
 from uuid import uuid4
@@ -8,6 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from models.document import (
+    MULTI_FILE_UPLOAD_OPENAPI_EXTRA,
     DocumentsResponse,
     DocumentMetadata,
     DocumentBatchUploadResponse,
@@ -54,24 +54,7 @@ def _error(code: str, message: str, http_status: int) -> HTTPException:
     "/documents/upload",
     response_model=DocumentBatchUploadResponse,
     status_code=status.HTTP_201_CREATED,
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "multipart/form-data": {
-                    "schema": {
-                        "type": "object",
-                        "required": ["files"],
-                        "properties": {
-                            "files": {
-                                "type": "array",
-                                "items": {"type": "string", "format": "binary"},
-                            },
-                        },
-                    }
-                }
-            }
-        }
-    },
+    openapi_extra=MULTI_FILE_UPLOAD_OPENAPI_EXTRA,
 )
 async def upload_documents(
     files: List[UploadFile] = File(
@@ -138,58 +121,42 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
         )
 
     document_id = str(uuid4())
-    temporary_path: Path | None = None
     size_bytes = 0
 
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            prefix=f"{document_id}_",
-            suffix=".tmp",
-            dir=storage.upload_dir,
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            first_chunk = await file.read(8192)
-            if not first_chunk:
-                return DocumentUploadResponse(
-                    filename=filename,
-                    content_type=file.content_type or "",
-                    size_bytes=0,
-                    status="failed",
-                    message="The uploaded file is empty",
-                )
-            if not first_chunk.startswith(b"%PDF-"):
-                return DocumentUploadResponse(
-                    filename=filename,
-                    content_type=file.content_type or "",
-                    size_bytes=0,
-                    status="failed",
-                    message="The file is not a valid PDF",
-                )
-            temporary.write(first_chunk)
-            size_bytes = len(first_chunk)
+        file_bytes = await file.read()
+        size_bytes = len(file_bytes)
 
-            while True:
-                chunk = await file.read(1024 * 1024)
-                if not chunk:
-                    break
-                size_bytes += len(chunk)
-                if size_bytes > MAX_PDF_SIZE:
-                    return DocumentUploadResponse(
-                        filename=filename,
-                        content_type=file.content_type or "",
-                        size_bytes=size_bytes,
-                        status="failed",
-                        message="The PDF exceeds the configured size limit",
-                    )
-                temporary.write(chunk)
+        if size_bytes == 0:
+            return DocumentUploadResponse(
+                filename=filename,
+                content_type=file.content_type or "",
+                size_bytes=0,
+                status="failed",
+                message="The uploaded file is empty",
+            )
+        if not file_bytes.startswith(b"%PDF-"):
+            return DocumentUploadResponse(
+                filename=filename,
+                content_type=file.content_type or "",
+                size_bytes=0,
+                status="failed",
+                message="The file is not a valid PDF",
+            )
+        if size_bytes > MAX_PDF_SIZE:
+            return DocumentUploadResponse(
+                filename=filename,
+                content_type=file.content_type or "",
+                size_bytes=size_bytes,
+                status="failed",
+                message="The PDF exceeds the configured size limit",
+            )
 
         logger.info(
-            "[UPLOAD] received file: filename=%r size_bytes=%d", filename, size_bytes
+            "[UPLOAD] received file in-memory: filename=%r size_bytes=%d", filename, size_bytes
         )
         cloudinary_result = cloudinary_storage.upload(
-            temporary_path,
+            file_bytes,
             public_id=document_id,
             content_type="application/pdf",
             context={
@@ -213,7 +180,7 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
             "cloudinary_url": cloudinary_result.get("secure_url")
             or cloudinary_result.get("url"),
             "cloudinary_asset_id": cloudinary_result.get("asset_id"),
-            "cloudinary_resource_type": cloudinary_result.get("resource_type", "raw"),
+            "cloudinary_resource_type": cloudinary_result.get("resource_type", "image"),
         }
         storage.save_metadata(metadata)
         try:
@@ -221,7 +188,7 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
                 user_id=USER_ID,
                 document_id=cloudinary_public_id,
                 document_name=Path(filename).name,
-                file_path=temporary_path,
+                file_data=file_bytes,
                 content_type="application/pdf",
             )
         except Exception as exc:
@@ -262,17 +229,6 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
             message="Document uploaded and indexed successfully",
             cloudinary_public_id=metadata["cloudinary_public_id"],
         )
-    except OSError as exc:
-        logger.exception(
-            "[UPLOAD] storage exception for filename=%r: %s", filename, exc
-        )
-        return DocumentUploadResponse(
-            filename=filename,
-            content_type=file.content_type or "",
-            size_bytes=size_bytes,
-            status="failed",
-            message=f"Could not store the PDF: {exc}",
-        )
     except Exception as exc:
         logger.exception(
             "[UPLOAD] unexpected exception for filename=%r: %s", filename, exc
@@ -285,8 +241,6 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
             message="Could not process the uploaded file",
         )
     finally:
-        if temporary_path is not None and temporary_path.exists():
-            temporary_path.unlink(missing_ok=True)
         await file.close()
 
 
@@ -302,31 +256,10 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
             message="Only PNG, JPEG, and WebP images are supported",
         )
     document_id = str(uuid4())
-    temporary_path: Path | None = None
     size_bytes = 0
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            prefix=f"{document_id}_",
-            suffix=".tmp",
-            dir=storage.upload_dir,
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            while True:
-                chunk = await file.read(1024 * 1024)
-                if not chunk:
-                    break
-                size_bytes += len(chunk)
-                if size_bytes > MAX_IMAGE_SIZE:
-                    return DocumentUploadResponse(
-                        filename=filename,
-                        content_type=content_type,
-                        size_bytes=size_bytes,
-                        status="failed",
-                        message="The image exceeds the configured size limit",
-                    )
-                temporary.write(chunk)
+        file_bytes = await file.read()
+        size_bytes = len(file_bytes)
         if size_bytes == 0:
             return DocumentUploadResponse(
                 filename=filename,
@@ -335,8 +268,16 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
                 status="failed",
                 message="The image file is empty",
             )
+        if size_bytes > MAX_IMAGE_SIZE:
+            return DocumentUploadResponse(
+                filename=filename,
+                content_type=content_type,
+                size_bytes=size_bytes,
+                status="failed",
+                message="The image exceeds the configured size limit",
+            )
         cloudinary_result = cloudinary_storage.upload(
-            temporary_path,
+            file_bytes,
             public_id=document_id,
             content_type=content_type,
             context={
@@ -368,7 +309,7 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
                 user_id=USER_ID,
                 document_id=cloudinary_public_id,
                 document_name=filename,
-                file_path=temporary_path,
+                file_data=file_bytes,
                 content_type=content_type,
             )
         except Exception as exc:
@@ -413,15 +354,6 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
             message="Document uploaded and indexed successfully",
             cloudinary_public_id=metadata["cloudinary_public_id"],
         )
-    except OSError as exc:
-        logger.exception("[UPLOAD] image storage failed for filename=%r", filename)
-        return DocumentUploadResponse(
-            filename=filename,
-            content_type=content_type,
-            size_bytes=size_bytes,
-            status="failed",
-            message=f"Could not store the image: {exc}",
-        )
     except RuntimeError as exc:
         logger.exception(
             "[UPLOAD] image configuration error for filename=%r: %s", filename, exc
@@ -447,8 +379,6 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
             message=f"Could not process the image: {exc}",
         )
     finally:
-        if temporary_path is not None and temporary_path.exists():
-            temporary_path.unlink(missing_ok=True)
         await file.close()
 
 
@@ -557,6 +487,7 @@ def delete_document(document_id: str) -> dict[str, str]:
             cloudinary_storage.delete(
                 public_id=record["cloudinary_public_id"],
                 content_type=record.get("content_type", "application/pdf"),
+                resource_type=record.get("cloudinary_resource_type"),
             )
         storage.delete_document_metadata(document_id, USER_ID)
     except Exception as exc:
