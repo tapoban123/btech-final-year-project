@@ -45,6 +45,7 @@ class DocumentSearchResult(BaseModel):
     document_id: str
     filename: str
     cloudinary_url: str | None = None
+    score: float | None = None
 
 
 class DocumentSearchResponse(BaseModel):
