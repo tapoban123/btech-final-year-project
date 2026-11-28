@@ -1,26 +1,17 @@
 import os
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import httpx
-
-
-import tempfile
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentStorage:
-    """Stores temporary upload files and document metadata in Supabase."""
+    """Stores and manages document metadata in Supabase."""
 
-    def __init__(self, upload_dir: str | None = None) -> None:
-        self.upload_dir = Path(upload_dir or os.getenv("UPLOAD_DIR", tempfile.gettempdir()))
-        try:
-            self.upload_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
+    def __init__(self) -> None:
         self.supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
         self.supabase_key = (
             os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
@@ -144,14 +135,3 @@ class DocumentStorage:
             "cloudinary_resource_type": row.get("cloudinary_resource_type"),
             "error_message": row.get("error_message"),
         }
-
-    def document_path(self, document_id: str, stored_filename: str | None = None) -> Path:
-        """Return a stored document path; IDs and filenames are never trusted blindly."""
-        if "/" in document_id or "\\" in document_id:
-            raise ValueError("Invalid document ID")
-        if stored_filename:
-            candidate = Path(stored_filename).name
-            if candidate != stored_filename or not candidate.startswith(f"{document_id}."):
-                raise ValueError("Invalid stored filename")
-            return self.upload_dir / candidate
-        return self.upload_dir / f"{document_id}.pdf"

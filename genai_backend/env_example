@@ -2,8 +2,6 @@
 HOST=0.0.0.0
 PORT=8000
 
-# Local PDF storage
-UPLOAD_DIR=./storage/uploads
 MAX_PDF_SIZE_MB=25
 MAX_IMAGE_SIZE_MB=10
 
