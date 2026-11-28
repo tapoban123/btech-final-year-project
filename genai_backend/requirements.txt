@@ -22,7 +22,3 @@ pinecone
 # HTTP and asynchronous utilities
 httpx
 cloudinary
-
-# Testing
-pytest
-pytest-asyncio
