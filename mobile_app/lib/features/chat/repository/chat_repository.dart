@@ -1,5 +1,7 @@
 import '../../dashboard/repository/models/document_item.dart';
 import '../api/chat_api_client.dart';
+import '../models/chat_history_model.dart';
+import '../models/chat_query_model.dart';
 import 'models/chat_message.dart';
 
 abstract class IChatRepository {
@@ -16,56 +18,35 @@ class ChatRepository implements IChatRepository {
 
   @override
   Future<List<ChatMessage>> getChatHistory() async {
-    final rawList = await _apiClient.getInitialChatHistoryRaw();
-    return rawList.map((item) {
-      final senderStr = item['sender'] as String? ?? 'user';
-      final sender = senderStr == 'assistant'
+    final List<ChatHistoryItemModel> list =
+        await _apiClient.getInitialChatHistory();
+    return list.map((item) {
+      final sender = item.sender == 'assistant'
           ? MessageSender.assistant
           : MessageSender.user;
 
-      final rawPoints = (item['points'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-      final points = rawPoints.map((p) {
+      final points = item.points.map((p) {
         return SynthesisPoint(
-          number: p['number'] as int? ?? 1,
-          title: p['title'] as String? ?? '',
-          description: p['description'] as String? ?? '',
-          highlight: p['highlight'] as String?,
+          number: p.number,
+          title: p.title,
+          description: p.description,
+          highlight: p.highlight,
         );
       }).toList();
 
-      final rawCitations =
-          (item['citations'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-      final citations = rawCitations.map((c) {
-        final typeStr = c['type'] as String? ?? 'pdf';
-        final DocumentType docType;
-        switch (typeStr) {
-          case 'image':
-            docType = DocumentType.image;
-            break;
-          case 'audio':
-            docType = DocumentType.audio;
-            break;
-          case 'docx':
-            docType = DocumentType.docx;
-            break;
-          case 'pdf':
-          default:
-            docType = DocumentType.pdf;
-            break;
-        }
-
+      final citations = item.citations.map((c) {
         return CitationItem(
-          title: c['title'] as String? ?? '',
-          reference: c['reference'] as String? ?? '',
-          type: docType,
+          title: c.title,
+          reference: c.reference,
+          type: _inferDocType(c.type),
         );
       }).toList();
 
       return ChatMessage(
-        id: item['id'] as String,
+        id: item.id,
         sender: sender,
-        content: item['content'] as String,
-        timestamp: item['timestamp'] as String,
+        content: item.content,
+        timestamp: item.timestamp,
         synthesisPoints: points,
         citations: citations,
       );
@@ -74,30 +55,12 @@ class ChatRepository implements IChatRepository {
 
   @override
   Future<List<ActiveRAGContext>> getActiveContexts() async {
-    final rawList = await _apiClient.getActiveContextsRaw();
-    return rawList.map((c) {
-      final typeStr = c['type'] as String? ?? 'pdf';
-      final DocumentType docType;
-      switch (typeStr) {
-        case 'image':
-          docType = DocumentType.image;
-          break;
-        case 'audio':
-          docType = DocumentType.audio;
-          break;
-        case 'docx':
-          docType = DocumentType.docx;
-          break;
-        case 'pdf':
-        default:
-          docType = DocumentType.pdf;
-          break;
-      }
-
+    final list = await _apiClient.getActiveContexts();
+    return list.map((c) {
       return ActiveRAGContext(
-        id: c['id'] as String,
-        title: c['title'] as String,
-        type: docType,
+        id: c.id,
+        title: c.title,
+        type: _inferDocType(c.type),
       );
     }).toList();
   }
@@ -107,34 +70,44 @@ class ChatRepository implements IChatRepository {
     String userPrompt,
     List<String> contextIds,
   ) async {
-    final raw = await _apiClient.sendQueryRaw(userPrompt, contextIds);
-    final rawPoints = (raw['points'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final points = rawPoints.map((p) {
-      return SynthesisPoint(
-        number: p['number'] as int? ?? 1,
-        title: p['title'] as String? ?? '',
-        description: p['description'] as String? ?? '',
-        highlight: p['highlight'] as String?,
-      );
-    }).toList();
+    final request = DocumentQueryRequestModel(query: userPrompt);
+    final response = await _apiClient.sendQuery(request);
 
-    final rawCitations =
-        (raw['citations'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final citations = rawCitations.map((c) {
+    final citations = response.sources.map((s) {
       return CitationItem(
-        title: c['title'] as String? ?? '',
-        reference: c['reference'] as String? ?? '',
-        type: DocumentType.pdf,
+        title: s.documentName.isNotEmpty ? s.documentName : 'Document',
+        reference: 'p.${s.page}',
+        type: _inferDocType(s.mimeType ?? 'pdf'),
       );
     }).toList();
 
     return ChatMessage(
-      id: raw['id'] as String,
+      id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
       sender: MessageSender.assistant,
-      content: raw['content'] as String,
-      timestamp: raw['timestamp'] as String,
-      synthesisPoints: points,
+      content: response.answer,
+      timestamp: 'Just now',
+      synthesisPoints: [
+        SynthesisPoint(
+          number: 1,
+          title: 'Key Finding',
+          description: response.answer,
+        ),
+      ],
       citations: citations,
     );
+  }
+
+  DocumentType _inferDocType(String typeStr) {
+    final lower = typeStr.toLowerCase();
+    if (lower == 'image' || lower.startsWith('image/')) {
+      return DocumentType.image;
+    }
+    if (lower == 'audio' || lower.startsWith('audio/')) {
+      return DocumentType.audio;
+    }
+    if (lower == 'docx' || lower.endsWith('.docx')) {
+      return DocumentType.docx;
+    }
+    return DocumentType.pdf;
   }
 }

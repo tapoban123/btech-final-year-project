@@ -1,46 +1,86 @@
-/// API Client for file uploading and multimodal voice ingestion operations.
+import 'package:dio/dio.dart';
+
+import '../../../core/constants/api_constants.dart';
+import '../../../core/network/dio_client.dart';
+import '../models/upload_response_model.dart';
+
+/// API Client for file uploading and multimodal voice ingestion operations using global DioClient.
 class UploadApiClient {
+  final Dio _dio;
   final Duration networkDelay;
 
-  UploadApiClient({this.networkDelay = Duration.zero});
+  UploadApiClient({
+    Dio? dio,
+    this.networkDelay = Duration.zero,
+  }) : _dio = dio ?? DioClient().dio;
 
-  Future<List<Map<String, dynamic>>> getRecentUploadsRaw() async {
+  Dio get client => _dio;
+
+  Future<List<DocumentUploadResponseModel>> getRecentUploads() async {
     if (networkDelay > Duration.zero) {
       await Future.delayed(networkDelay);
     }
-
-    // Production environment: Starts empty until user uploads files
     return [];
   }
 
-  Future<Map<String, dynamic>> uploadFileRaw(
+  Future<DocumentUploadResponseModel> uploadFile(
     String filename,
-    String fileType,
-  ) async {
+    String fileType, {
+    String? filePath,
+  }) async {
     if (networkDelay > Duration.zero) {
       await Future.delayed(networkDelay);
     }
 
-    return {
-      'id': 'up_${DateTime.now().millisecondsSinceEpoch}',
-      'title': filename,
-      'type': fileType,
-      'stageDescription': '',
-      'status': 'processing',
-    };
+    if (filePath != null && filePath.isNotEmpty) {
+      try {
+        final formData = FormData.fromMap({
+          'files': [
+            await MultipartFile.fromFile(
+              filePath,
+              filename: filename,
+            ),
+          ],
+        });
+
+        final response = await _dio.post(
+          ApiConstants.uploadDocuments,
+          data: formData,
+        );
+
+        if (response.statusCode == 201 && response.data != null) {
+          final batch = DocumentBatchUploadResponseModel.fromJson(
+            response.data as Map<String, dynamic>,
+          );
+          if (batch.results.isNotEmpty) {
+            return batch.results.first;
+          }
+        }
+      } on DioException {
+        rethrow;
+      }
+    }
+
+    return DocumentUploadResponseModel(
+      id: 'up_${DateTime.now().millisecondsSinceEpoch}',
+      filename: filename,
+      contentType: fileType,
+      status: 'processing',
+      message: 'Processing file',
+    );
   }
 
-  Future<Map<String, dynamic>> saveVoiceMemoRaw(int durationSeconds) async {
+  Future<VoiceMemoResponseModel> saveVoiceMemo(int durationSeconds) async {
     if (networkDelay > Duration.zero) {
       await Future.delayed(networkDelay);
     }
 
-    return {
-      'id': 'memo_${DateTime.now().millisecondsSinceEpoch}',
-      'title': 'Voice_Memo_${DateTime.now().millisecondsSinceEpoch}.m4a',
-      'type': 'audio',
-      'stageDescription': '',
-      'status': 'processing',
-    };
+    return VoiceMemoResponseModel(
+      id: 'memo_${DateTime.now().millisecondsSinceEpoch}',
+      title: 'Voice_Memo_${DateTime.now().millisecondsSinceEpoch}.m4a',
+      type: 'audio',
+      stageDescription: 'Transcribing audio vectors',
+      status: 'processing',
+    );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:mobile_app/features/dashboard/repository/models/document_item.dart';
 import 'package:mobile_app/features/upload/api/upload_api_client.dart';
+import 'package:mobile_app/features/upload/models/upload_response_model.dart';
 import 'package:mobile_app/features/upload/repository/models/upload_item.dart';
 import 'package:mobile_app/features/upload/repository/upload_repository.dart';
 
@@ -17,23 +18,24 @@ void main() {
   });
 
   group('UploadRepository with Mock Responses', () {
-    test('getRecentUploads maps raw API data to List<UploadItem>', () async {
-      when(() => mockApiClient.getRecentUploadsRaw()).thenAnswer(
-        (_) async => [
-          {
-            'id': 'u1',
-            'title': 'Contract.pdf',
-            'type': 'pdf',
-            'stageDescription': 'Analyzing semantic vectors',
-            'status': 'processing',
-          },
-          {
-            'id': 'u2',
-            'title': 'Whiteboard.png',
-            'type': 'image',
-            'stageDescription': 'OCR complete',
-            'status': 'completed',
-          },
+    test('getRecentUploads maps DocumentUploadResponseModel to List<UploadItem>',
+        () async {
+      when(() => mockApiClient.getRecentUploads()).thenAnswer(
+        (_) async => const [
+          DocumentUploadResponseModel(
+            documentId: 'u1',
+            filename: 'Contract.pdf',
+            contentType: 'application/pdf',
+            message: 'Analyzing semantic vectors',
+            status: 'processing',
+          ),
+          DocumentUploadResponseModel(
+            documentId: 'u2',
+            filename: 'Whiteboard.png',
+            contentType: 'image/png',
+            message: 'OCR complete',
+            status: 'completed',
+          ),
         ],
       );
 
@@ -45,21 +47,27 @@ void main() {
       expect(uploads.first.status, UploadProcessingStatus.processing);
       expect(uploads[1].type, DocumentType.image);
       expect(uploads[1].status, UploadProcessingStatus.completed);
+      verify(() => mockApiClient.getRecentUploads()).called(1);
     });
 
     test('uploadFile sends file details and returns created UploadItem',
         () async {
-      when(() => mockApiClient.uploadFileRaw('New_File.pdf', 'pdf')).thenAnswer(
-        (_) async => {
-          'id': 'up_new',
-          'title': 'New_File.pdf',
-          'type': 'pdf',
-          'stageDescription': 'Queued',
-          'status': 'processing',
-        },
+      when(() => mockApiClient.uploadFile(
+            'New_File.pdf',
+            'pdf',
+            filePath: any(named: 'filePath'),
+          )).thenAnswer(
+        (_) async => const DocumentUploadResponseModel(
+          documentId: 'up_new',
+          filename: 'New_File.pdf',
+          contentType: 'application/pdf',
+          message: 'Queued',
+          status: 'processing',
+        ),
       );
 
-      final item = await repository.uploadFile('New_File.pdf', DocumentType.pdf);
+      final item =
+          await repository.uploadFile('New_File.pdf', DocumentType.pdf);
 
       expect(item.id, 'up_new');
       expect(item.title, 'New_File.pdf');
@@ -68,24 +76,25 @@ void main() {
 
     test('saveVoiceMemo sends duration and returns created memo UploadItem',
         () async {
-      when(() => mockApiClient.saveVoiceMemoRaw(120)).thenAnswer(
-        (_) async => {
-          'id': 'memo_123',
-          'title': 'Voice_Memo_123.m4a',
-          'type': 'audio',
-          'stageDescription': 'Transcribing audio vectors',
-          'status': 'processing',
-        },
+      when(() => mockApiClient.saveVoiceMemo(120)).thenAnswer(
+        (_) async => const VoiceMemoResponseModel(
+          id: 'memo_123',
+          title: 'Voice_Memo_123.m4a',
+          type: 'audio',
+          stageDescription: 'Transcribing audio vectors',
+          status: 'processing',
+        ),
       );
 
       final memo = await repository.saveVoiceMemo(120);
 
       expect(memo.id, 'memo_123');
       expect(memo.type, DocumentType.audio);
+      verify(() => mockApiClient.saveVoiceMemo(120)).called(1);
     });
 
     test('propagates exception when API fails', () async {
-      when(() => mockApiClient.getRecentUploadsRaw())
+      when(() => mockApiClient.getRecentUploads())
           .thenThrow(Exception('Server Error 500'));
 
       expect(() => repository.getRecentUploads(), throwsA(isA<Exception>()));

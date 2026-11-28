@@ -1,5 +1,6 @@
 import '../../dashboard/repository/models/document_item.dart';
 import '../api/upload_api_client.dart';
+import '../models/upload_response_model.dart';
 import 'models/upload_item.dart';
 
 abstract class IUploadRepository {
@@ -21,8 +22,8 @@ class UploadRepository implements IUploadRepository {
 
   @override
   Future<List<UploadItem>> getRecentUploads() async {
-    final rawList = await _apiClient.getRecentUploadsRaw();
-    return rawList.map((item) => _mapToUploadItem(item)).toList();
+    final list = await _apiClient.getRecentUploads();
+    return list.map(_mapUploadResponseToUploadItem).toList();
   }
 
   @override
@@ -32,57 +33,71 @@ class UploadRepository implements IUploadRepository {
     String? filePath,
     int? fileSize,
   }) async {
-    final raw = await _apiClient.uploadFileRaw(filename, type.name);
-    final item = _mapToUploadItem(raw);
+    final model = await _apiClient.uploadFile(
+      filename,
+      type.name,
+      filePath: filePath,
+    );
+    final item = _mapUploadResponseToUploadItem(model);
     return item.copyWith(filePath: filePath, fileSize: fileSize);
   }
 
   @override
   Future<UploadItem> saveVoiceMemo(int durationSeconds) async {
-    final raw = await _apiClient.saveVoiceMemoRaw(durationSeconds);
-    return _mapToUploadItem(raw);
+    final memo = await _apiClient.saveVoiceMemo(durationSeconds);
+    return UploadItem(
+      id: memo.id,
+      title: memo.title,
+      type: DocumentType.audio,
+      stageDescription: memo.stageDescription,
+      status: _mapStatus(memo.status),
+    );
   }
 
-  UploadItem _mapToUploadItem(Map<String, dynamic> raw) {
-    final typeStr = raw['type'] as String? ?? 'pdf';
-    final DocumentType docType;
-    switch (typeStr) {
-      case 'image':
-        docType = DocumentType.image;
-        break;
-      case 'audio':
-        docType = DocumentType.audio;
-        break;
-      case 'docx':
-        docType = DocumentType.docx;
-        break;
-      case 'pdf':
-      default:
-        docType = DocumentType.pdf;
-        break;
-    }
+  UploadItem _mapUploadResponseToUploadItem(DocumentUploadResponseModel model) {
+    return UploadItem(
+      id: model.resolvedId.isNotEmpty
+          ? model.resolvedId
+          : 'up_${DateTime.now().millisecondsSinceEpoch}',
+      title: model.filename,
+      type: _inferDocType(model.filename, model.contentType),
+      stageDescription: model.message,
+      status: _mapStatus(model.status),
+    );
+  }
 
-    final statusStr = raw['status'] as String? ?? 'processing';
-    final UploadProcessingStatus status;
-    switch (statusStr) {
+  DocumentType _inferDocType(String filename, String contentType) {
+    final lower = filename.toLowerCase();
+    if (contentType.startsWith('image/') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.webp')) {
+      return DocumentType.image;
+    }
+    if (contentType.startsWith('audio/') ||
+        lower.endsWith('.mp3') ||
+        lower.endsWith('.wav') ||
+        lower.endsWith('.m4a')) {
+      return DocumentType.audio;
+    }
+    if (lower.endsWith('.docx') || lower.endsWith('.doc')) {
+      return DocumentType.docx;
+    }
+    return DocumentType.pdf;
+  }
+
+  UploadProcessingStatus _mapStatus(String statusStr) {
+    switch (statusStr.toLowerCase()) {
       case 'completed':
-        status = UploadProcessingStatus.completed;
-        break;
+        return UploadProcessingStatus.completed;
       case 'failed':
-        status = UploadProcessingStatus.failed;
-        break;
+        return UploadProcessingStatus.failed;
+      case 'queued':
+        return UploadProcessingStatus.queued;
       case 'processing':
       default:
-        status = UploadProcessingStatus.processing;
-        break;
+        return UploadProcessingStatus.processing;
     }
-
-    return UploadItem(
-      id: raw['id'] as String,
-      title: raw['title'] as String,
-      type: docType,
-      stageDescription: raw['stageDescription'] as String? ?? '',
-      status: status,
-    );
   }
 }

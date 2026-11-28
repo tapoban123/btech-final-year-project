@@ -56,6 +56,11 @@ backend/
 3. **Schemas (`schemas/`):** Pydantic v2 models that handle data validation, JSON serialization, and automatic Swagger docs (`/docs`).
 4. **Models (`models/`):** Minimal database tables/models for persisting users, document records, and chat messages.
 
+### 2.3. Prototype Mindset & Simplicity Directive
+- **Strictly Prototype Scope:** Treat the entire codebase as a prototype. Avoid premature enterprise patterns, complex abstraction layers, and intricate state machines.
+- **Prevent Multi-Level Fallbacks:** Do NOT write convoluted, multi-tier fallback chains. Stick to basic, single-level fallbacks (e.g., standard error return or simple default item).
+- **Simple, Direct Logic:** Keep repository parsing, DTO mapping, and service functions direct, readable, and minimal.
+
 ---
 
 ## 3. Technology-Specific Guidelines
