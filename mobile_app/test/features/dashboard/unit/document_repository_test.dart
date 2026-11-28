@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:mobile_app/features/dashboard/api/document_api_client.dart';
+import 'package:mobile_app/features/dashboard/models/dashboard_metrics_model.dart';
+import 'package:mobile_app/features/dashboard/models/document_response_model.dart';
 import 'package:mobile_app/features/dashboard/repository/document_repository.dart';
 import 'package:mobile_app/features/dashboard/repository/models/document_item.dart';
 
@@ -16,28 +18,28 @@ void main() {
   });
 
   group('DocumentRepository with Mock Responses', () {
-    test('getDocuments maps raw API response to List<DocumentItem>', () async {
-      when(() => mockApiClient.getDocumentsRaw()).thenAnswer(
-        (_) async => [
-          {
-            'id': 'mock_1',
-            'title': 'Test_Contract.pdf',
-            'type': 'pdf',
-            'fileSize': '3.5 MB',
-            'date': 'Oct 25',
-            'statusTag': 'Parsed',
-            'isStatusHighlighted': true,
-            'isSelected': true,
-          },
-          {
-            'id': 'mock_2',
-            'title': 'Diagram.png',
-            'type': 'image',
-            'fileSize': '1.2 MB',
-            'date': 'Oct 24',
-            'statusTag': 'OCR Ready',
-          },
-        ],
+    test('getDocuments maps DocumentsResponseModel to List<DocumentItem>',
+        () async {
+      when(() => mockApiClient.getDocuments()).thenAnswer(
+        (_) async => const DocumentsResponseModel(
+          documents: [
+            DocumentMetadataModel(
+              documentId: 'mock_1',
+              filename: 'Test_Contract.pdf',
+              sizeBytes: 3670016,
+              status: 'Parsed',
+              createdAt: '2026-10-25T00:00:00.000Z',
+            ),
+            DocumentMetadataModel(
+              documentId: 'mock_2',
+              filename: 'Diagram.png',
+              sizeBytes: 1258291,
+              status: 'OCR Ready',
+              createdAt: '2026-10-24T00:00:00.000Z',
+              mimeType: 'image/png',
+            ),
+          ],
+        ),
       );
 
       final result = await repository.getDocuments();
@@ -45,46 +47,48 @@ void main() {
       expect(result.length, 2);
       expect(result.first.id, 'mock_1');
       expect(result.first.type, DocumentType.pdf);
-      expect(result.first.isSelected, isTrue);
       expect(result[1].type, DocumentType.image);
-      verify(() => mockApiClient.getDocumentsRaw()).called(1);
+      verify(() => mockApiClient.getDocuments()).called(1);
     });
 
     test('getDocuments handles empty response list correctly', () async {
-      when(() => mockApiClient.getDocumentsRaw()).thenAnswer((_) async => []);
+      when(() => mockApiClient.getDocuments()).thenAnswer(
+        (_) async => const DocumentsResponseModel(documents: []),
+      );
 
       final result = await repository.getDocuments();
 
       expect(result, isEmpty);
-      verify(() => mockApiClient.getDocumentsRaw()).called(1);
+      verify(() => mockApiClient.getDocuments()).called(1);
     });
 
-    test('getDocuments handles unknown file type gracefully by defaulting to pdf',
+    test(
+        'getDocuments handles unknown file type gracefully by defaulting to pdf',
         () async {
-      when(() => mockApiClient.getDocumentsRaw()).thenAnswer(
-        (_) async => [
-          {
-            'id': 'unknown_type',
-            'title': 'Arbitrary_File.xyz',
-            'type': 'unsupported_extension',
-            'fileSize': '500 KB',
-            'date': 'Oct 20',
-            'statusTag': 'Unknown',
-          },
-        ],
+      when(() => mockApiClient.getDocuments()).thenAnswer(
+        (_) async => const DocumentsResponseModel(
+          documents: [
+            DocumentMetadataModel(
+              documentId: 'unknown_type',
+              filename: 'Arbitrary_File.xyz',
+              sizeBytes: 512000,
+              status: 'Unknown',
+            ),
+          ],
+        ),
       );
 
       final result = await repository.getDocuments();
       expect(result.first.type, DocumentType.pdf);
     });
 
-    test('getMetrics maps raw metric data to DashboardMetrics', () async {
-      when(() => mockApiClient.getDashboardMetricsRaw()).thenAnswer(
-        (_) async => {
-          'synthesizedDocsCount': 42,
-          'audioNotesHours': 8.5,
-          'confidencePercentage': 99.8,
-        },
+    test('getMetrics maps DashboardMetricsModel to DashboardMetrics', () async {
+      when(() => mockApiClient.getDashboardMetrics()).thenAnswer(
+        (_) async => const DashboardMetricsModel(
+          synthesizedDocsCount: 42,
+          audioNotesHours: 8.5,
+          confidencePercentage: 99.8,
+        ),
       );
 
       final metrics = await repository.getMetrics();
@@ -92,11 +96,11 @@ void main() {
       expect(metrics.synthesizedDocsCount, 42);
       expect(metrics.audioNotesHours, 8.5);
       expect(metrics.confidencePercentage, 99.8);
-      verify(() => mockApiClient.getDashboardMetricsRaw()).called(1);
+      verify(() => mockApiClient.getDashboardMetrics()).called(1);
     });
 
     test('rethrows exception when API client fails', () async {
-      when(() => mockApiClient.getDocumentsRaw())
+      when(() => mockApiClient.getDocuments())
           .thenThrow(Exception('Network timeout error 504'));
 
       expect(() => repository.getDocuments(), throwsA(isA<Exception>()));

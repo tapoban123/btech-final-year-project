@@ -1,4 +1,6 @@
+import '../../../core/utils/app_formatters.dart';
 import '../api/document_api_client.dart';
+import '../models/document_response_model.dart';
 import 'models/document_item.dart';
 
 abstract class IDocumentRepository {
@@ -14,48 +16,87 @@ class DocumentRepository implements IDocumentRepository {
 
   @override
   Future<List<DocumentItem>> getDocuments() async {
-    final rawList = await _apiClient.getDocumentsRaw();
-    return rawList.map((item) {
-      final typeString = item['type'] as String? ?? 'pdf';
-      final DocumentType docType;
-      switch (typeString) {
-        case 'image':
-          docType = DocumentType.image;
-          break;
-        case 'audio':
-          docType = DocumentType.audio;
-          break;
-        case 'docx':
-          docType = DocumentType.docx;
-          break;
-        case 'pdf':
-        default:
-          docType = DocumentType.pdf;
-          break;
-      }
-
-      return DocumentItem(
-        id: item['id'] as String,
-        title: item['title'] as String,
-        type: docType,
-        fileSize: item['fileSize'] as String,
-        date: item['date'] as String,
-        statusTag: item['statusTag'] as String,
-        isStatusHighlighted: item['isStatusHighlighted'] as bool? ?? false,
-        duration: item['duration'] as String?,
-        isSelected: item['isSelected'] as bool? ?? false,
-      );
-    }).toList();
+    final response = await _apiClient.getDocuments();
+    return response.documents.map(_mapToDocumentItem).toList();
   }
 
   @override
   Future<DashboardMetrics> getMetrics() async {
-    final rawMetrics = await _apiClient.getDashboardMetricsRaw();
+    final metrics = await _apiClient.getDashboardMetrics();
     return DashboardMetrics(
-      synthesizedDocsCount: rawMetrics['synthesizedDocsCount'] as int? ?? 24,
-      audioNotesHours: (rawMetrics['audioNotesHours'] as num?)?.toDouble() ?? 4.8,
-      confidencePercentage:
-          (rawMetrics['confidencePercentage'] as num?)?.toDouble() ?? 99.4,
+      synthesizedDocsCount: metrics.synthesizedDocsCount,
+      audioNotesHours: metrics.audioNotesHours,
+      confidencePercentage: metrics.confidencePercentage,
     );
+  }
+
+  DocumentItem _mapToDocumentItem(DocumentMetadataModel doc) {
+    final filename = doc.filename;
+    final mimeType = doc.mimeType ?? '';
+    final type = _inferType(filename, mimeType);
+    final isAudio = type == DocumentType.audio;
+
+    final createdAt = doc.createdAt != null
+        ? DateTime.tryParse(doc.createdAt!) ?? DateTime.now()
+        : DateTime.now();
+
+    final durationStr =
+        isAudio ? '${AppFormatters.formatDuration(865)} min' : null;
+
+    final fileSizeStr = isAudio
+        ? (durationStr ?? '')
+        : (filename.toLowerCase().endsWith('.docx')
+            ? '${AppFormatters.formatNumber((doc.sizeBytes / 1024).round())} KB'
+            : AppFormatters.formatFileSizeInMb(doc.sizeBytes / (1024 * 1024)));
+
+    return DocumentItem(
+      id: doc.resolvedId,
+      title: filename,
+      type: type,
+      fileSize: fileSizeStr,
+      date: AppFormatters.formatDate(createdAt),
+      statusTag: _formatStatusTag(doc.status),
+      isStatusHighlighted: doc.status.toLowerCase() == 'completed' ||
+          doc.status == 'Parsed' ||
+          doc.status == 'Voice Transcribed' ||
+          doc.status == 'Analyzed',
+      duration: durationStr,
+      isSelected: false,
+    );
+  }
+
+  DocumentType _inferType(String filename, String mimeType) {
+    final lower = filename.toLowerCase();
+    if (mimeType.startsWith('image/') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.webp')) {
+      return DocumentType.image;
+    }
+    if (mimeType.startsWith('audio/') ||
+        lower.endsWith('.mp3') ||
+        lower.endsWith('.wav') ||
+        lower.endsWith('.m4a')) {
+      return DocumentType.audio;
+    }
+    if (lower.endsWith('.docx') || lower.endsWith('.doc')) {
+      return DocumentType.docx;
+    }
+    return DocumentType.pdf;
+  }
+
+  String _formatStatusTag(String? status) {
+    if (status == null || status.isEmpty) return 'Ready';
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return 'Parsed';
+      case 'processing':
+        return 'Processing';
+      case 'failed':
+        return 'Failed';
+      default:
+        return status;
+    }
   }
 }
