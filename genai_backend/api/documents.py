@@ -1,5 +1,7 @@
+import asyncio
 import os
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 from uuid import uuid4
@@ -16,7 +18,11 @@ from models.document import (
     DocumentSearchResponse,
     DocumentSearchResult,
 )
-from models.rag import DocumentQueryRequest, MultiDocumentQueryResponse
+from models.rag import (
+    DocumentQueryRequest,
+    MultiDocumentQueryResponse,
+    QueryCitation,
+)
 from services.document_storage import DocumentStorage
 from services.cloudinary_storage import CloudinaryStorage
 from services.rag_pipeline import rag_pipeline
@@ -27,6 +33,7 @@ cloudinary_storage = CloudinaryStorage()
 logger = logging.getLogger(__name__)
 MAX_PDF_SIZE = int(os.getenv("MAX_PDF_SIZE_MB", "25")) * 1024 * 1024
 MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
+MAX_CONCURRENT_UPLOADS = int(os.getenv("MAX_CONCURRENT_UPLOADS", "5"))
 IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 USER_ID = os.getenv("DUMMY_USER_ID", "local-test-user")
 
@@ -71,9 +78,28 @@ async def upload_documents(
     """
     if not files:
         raise _error("NO_FILES", "At least one document or image file is required", 400)
-    results: list[DocumentUploadResponse] = []
-    for file in files:
-        results.append(await _upload_document(file))
+
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_UPLOADS)
+
+    async def _bounded_upload(file: UploadFile) -> DocumentUploadResponse:
+        async with semaphore:
+            try:
+                return await _upload_document(file)
+            except Exception as exc:
+                logger.exception(
+                    "[UPLOAD] unhandled error processing %r: %s", file.filename, exc
+                )
+                return DocumentUploadResponse(
+                    filename=file.filename or "",
+                    content_type=file.content_type or "",
+                    size_bytes=0,
+                    status="failed",
+                    message=f"Upload failed: {exc}",
+                )
+
+    results: list[DocumentUploadResponse] = list(
+        await asyncio.gather(*[_bounded_upload(file) for file in files])
+    )
 
     successful = sum(result.status in {"uploaded", "completed"} for result in results)
     return DocumentBatchUploadResponse(
@@ -86,12 +112,13 @@ async def upload_documents(
 
 async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
     filename = file.filename or ""
+    content_type = file.content_type or ""
     logger.info(
         "[UPLOAD] endpoint hit: filename=%r content_type=%r",
         filename,
-        file.content_type,
+        content_type,
     )
-    if (file.content_type or "") in IMAGE_TYPES or Path(filename).suffix.lower() in {
+    if (content_type or "") in IMAGE_TYPES or Path(filename).suffix.lower() in {
         ".png",
         ".jpg",
         ".jpeg",
@@ -101,12 +128,12 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
     if not filename.lower().endswith(".pdf"):
         return DocumentUploadResponse(
             filename=filename,
-            content_type=file.content_type or "",
+            content_type=content_type,
             size_bytes=0,
             status="failed",
             message="Only PDF files are supported",
         )
-    if file.content_type not in (
+    if content_type not in (
         None,
         "",
         "application/pdf",
@@ -114,47 +141,74 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
     ):
         return DocumentUploadResponse(
             filename=filename,
-            content_type=file.content_type or "",
+            content_type=content_type,
             size_bytes=0,
             status="failed",
             message="The uploaded file must have PDF content type",
         )
 
-    document_id = str(uuid4())
-    size_bytes = 0
-
     try:
         file_bytes = await file.read()
-        size_bytes = len(file_bytes)
-
-        if size_bytes == 0:
-            return DocumentUploadResponse(
-                filename=filename,
-                content_type=file.content_type or "",
-                size_bytes=0,
-                status="failed",
-                message="The uploaded file is empty",
-            )
-        if not file_bytes.startswith(b"%PDF-"):
-            return DocumentUploadResponse(
-                filename=filename,
-                content_type=file.content_type or "",
-                size_bytes=0,
-                status="failed",
-                message="The file is not a valid PDF",
-            )
-        if size_bytes > MAX_PDF_SIZE:
-            return DocumentUploadResponse(
-                filename=filename,
-                content_type=file.content_type or "",
-                size_bytes=size_bytes,
-                status="failed",
-                message="The PDF exceeds the configured size limit",
-            )
-
-        logger.info(
-            "[UPLOAD] received file in-memory: filename=%r size_bytes=%d", filename, size_bytes
+    except Exception as exc:
+        logger.exception(
+            "[UPLOAD] failed reading bytes for filename=%r: %s", filename, exc
         )
+        return DocumentUploadResponse(
+            filename=filename,
+            content_type=content_type,
+            size_bytes=0,
+            status="failed",
+            message=f"Could not read the uploaded file: {exc}",
+        )
+    finally:
+        await file.close()
+
+    # Offload blocking PDF upload, Supabase metadata save, and RAG indexing to a worker thread
+    return await asyncio.to_thread(
+        _process_pdf_sync,
+        filename=filename,
+        content_type="application/pdf",
+        file_bytes=file_bytes,
+    )
+
+
+def _process_pdf_sync(
+    filename: str, content_type: str, file_bytes: bytes
+) -> DocumentUploadResponse:
+    document_id = str(uuid4())
+    size_bytes = len(file_bytes)
+
+    if size_bytes == 0:
+        return DocumentUploadResponse(
+            filename=filename,
+            content_type=content_type,
+            size_bytes=0,
+            status="failed",
+            message="The uploaded file is empty",
+        )
+    if not file_bytes.startswith(b"%PDF-"):
+        return DocumentUploadResponse(
+            filename=filename,
+            content_type=content_type,
+            size_bytes=0,
+            status="failed",
+            message="The file is not a valid PDF",
+        )
+    if size_bytes > MAX_PDF_SIZE:
+        return DocumentUploadResponse(
+            filename=filename,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            status="failed",
+            message="The PDF exceeds the configured size limit",
+        )
+
+    logger.info(
+        "[UPLOAD] received file in-memory: filename=%r size_bytes=%d",
+        filename,
+        size_bytes,
+    )
+    try:
         cloudinary_result = cloudinary_storage.upload(
             file_bytes,
             public_id=document_id,
@@ -235,13 +289,11 @@ async def _upload_document(file: UploadFile) -> DocumentUploadResponse:
         )
         return DocumentUploadResponse(
             filename=filename,
-            content_type=file.content_type or "",
+            content_type=content_type,
             size_bytes=size_bytes,
             status="failed",
             message="Could not process the uploaded file",
         )
-    finally:
-        await file.close()
 
 
 async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
@@ -255,27 +307,53 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
             status="failed",
             message="Only PNG, JPEG, and WebP images are supported",
         )
-    document_id = str(uuid4())
-    size_bytes = 0
     try:
         file_bytes = await file.read()
-        size_bytes = len(file_bytes)
-        if size_bytes == 0:
-            return DocumentUploadResponse(
-                filename=filename,
-                content_type=content_type,
-                size_bytes=0,
-                status="failed",
-                message="The image file is empty",
-            )
-        if size_bytes > MAX_IMAGE_SIZE:
-            return DocumentUploadResponse(
-                filename=filename,
-                content_type=content_type,
-                size_bytes=size_bytes,
-                status="failed",
-                message="The image exceeds the configured size limit",
-            )
+    except Exception as exc:
+        logger.exception(
+            "[UPLOAD] failed reading image bytes for filename=%r: %s", filename, exc
+        )
+        return DocumentUploadResponse(
+            filename=filename,
+            content_type=content_type,
+            size_bytes=0,
+            status="failed",
+            message=f"Could not read the uploaded image: {exc}",
+        )
+    finally:
+        await file.close()
+
+    # Offload blocking image upload, Gemini vision, and RAG indexing to a worker thread
+    return await asyncio.to_thread(
+        _process_image_sync,
+        filename=filename,
+        content_type=content_type,
+        file_bytes=file_bytes,
+    )
+
+
+def _process_image_sync(
+    filename: str, content_type: str, file_bytes: bytes
+) -> DocumentUploadResponse:
+    document_id = str(uuid4())
+    size_bytes = len(file_bytes)
+    if size_bytes == 0:
+        return DocumentUploadResponse(
+            filename=filename,
+            content_type=content_type,
+            size_bytes=0,
+            status="failed",
+            message="The image file is empty",
+        )
+    if size_bytes > MAX_IMAGE_SIZE:
+        return DocumentUploadResponse(
+            filename=filename,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            status="failed",
+            message="The image exceeds the configured size limit",
+        )
+    try:
         cloudinary_result = cloudinary_storage.upload(
             file_bytes,
             public_id=document_id,
@@ -378,8 +456,6 @@ async def _upload_image(file: UploadFile) -> DocumentUploadResponse:
             status="failed",
             message=f"Could not process the image: {exc}",
         )
-    finally:
-        await file.close()
 
 
 @router.post(
@@ -395,7 +471,76 @@ def query_documents(request: DocumentQueryRequest) -> MultiDocumentQueryResponse
     except Exception as exc:
         logger.exception("[RAG] query failed")
         raise _error("RAG_QUERY_FAILED", "Could not answer the question", 500) from exc
-    return MultiDocumentQueryResponse(**result)
+
+    raw_sources = result.get("sources", [])
+    source_doc_ids: list[str] = []
+    for source in raw_sources:
+        doc_id = source.get("document_id")
+        if doc_id and doc_id not in source_doc_ids:
+            source_doc_ids.append(doc_id)
+
+    try:
+        records = storage.get_metadata_for_ids(source_doc_ids, USER_ID)
+    except Exception as exc:
+        logger.warning("[RAG] failed to fetch document metadata: %s", exc)
+        records = []
+
+    records_by_id = {record["document_id"]: record for record in records}
+
+    citations = [
+        QueryCitation(
+            document_id=source.get("document_id", ""),
+            document_name=source.get("document_name", ""),
+            page=source.get("page", 0),
+            snippet=source.get("snippet"),
+            cloudinary_url=records_by_id.get(source.get("document_id", ""), {}).get(
+                "cloudinary_url"
+            ),
+            mime_type=(
+                records_by_id.get(source.get("document_id", ""), {}).get("mime_type")
+                or records_by_id.get(source.get("document_id", ""), {}).get("content_type")
+            ),
+        )
+        for source in raw_sources
+    ]
+
+    matched_documents: list[DocumentMetadata] = []
+    for doc_id in source_doc_ids:
+        if doc_id in records_by_id:
+            rec = records_by_id[doc_id]
+            matched_documents.append(
+                DocumentMetadata(
+                    document_id=doc_id,
+                    filename=rec.get("original_filename") or rec.get("filename") or "Unknown",
+                    size_bytes=rec.get("size_bytes") or 0,
+                    status=rec.get("status") or "completed",
+                    created_at=rec.get("created_at") or datetime.now(timezone.utc),
+                    cloudinary_url=rec.get("cloudinary_url"),
+                    mime_type=rec.get("mime_type") or rec.get("content_type"),
+                )
+            )
+        else:
+            doc_name = next(
+                (s.get("document_name") for s in raw_sources if s.get("document_id") == doc_id),
+                "Unknown",
+            )
+            matched_documents.append(
+                DocumentMetadata(
+                    document_id=doc_id,
+                    filename=doc_name or "Unknown",
+                    size_bytes=0,
+                    status="unknown",
+                    created_at=datetime.now(timezone.utc),
+                    cloudinary_url=None,
+                    mime_type=None,
+                )
+            )
+
+    return MultiDocumentQueryResponse(
+        answer=result.get("answer", ""),
+        sources=citations,
+        documents=matched_documents,
+    )
 
 
 @router.post("/documents/search", response_model=DocumentSearchResponse)
