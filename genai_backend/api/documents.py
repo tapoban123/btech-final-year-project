@@ -33,7 +33,6 @@ cloudinary_storage = CloudinaryStorage()
 logger = logging.getLogger(__name__)
 MAX_PDF_SIZE = int(os.getenv("MAX_PDF_SIZE_MB", "25")) * 1024 * 1024
 MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
-MAX_CONCURRENT_UPLOADS = int(os.getenv("MAX_CONCURRENT_UPLOADS", "5"))
 IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 USER_ID = os.getenv("DUMMY_USER_ID", "local-test-user")
 
@@ -79,26 +78,23 @@ async def upload_documents(
     if not files:
         raise _error("NO_FILES", "At least one document or image file is required", 400)
 
-    semaphore = asyncio.Semaphore(MAX_CONCURRENT_UPLOADS)
-
-    async def _bounded_upload(file: UploadFile) -> DocumentUploadResponse:
-        async with semaphore:
-            try:
-                return await _upload_document(file)
-            except Exception as exc:
-                logger.exception(
-                    "[UPLOAD] unhandled error processing %r: %s", file.filename, exc
-                )
-                return DocumentUploadResponse(
-                    filename=file.filename or "",
-                    content_type=file.content_type or "",
-                    size_bytes=0,
-                    status="failed",
-                    message=f"Upload failed: {exc}",
-                )
+    async def _safe_upload(file: UploadFile) -> DocumentUploadResponse:
+        try:
+            return await _upload_document(file)
+        except Exception as exc:
+            logger.exception(
+                "[UPLOAD] unhandled error processing %r: %s", file.filename, exc
+            )
+            return DocumentUploadResponse(
+                filename=file.filename or "",
+                content_type=file.content_type or "",
+                size_bytes=0,
+                status="failed",
+                message=f"Upload failed: {exc}",
+            )
 
     results: list[DocumentUploadResponse] = list(
-        await asyncio.gather(*[_bounded_upload(file) for file in files])
+        await asyncio.gather(*[_safe_upload(file) for file in files])
     )
 
     successful = sum(result.status in {"uploaded", "completed"} for result in results)
